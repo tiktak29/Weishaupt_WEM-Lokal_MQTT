@@ -2,7 +2,7 @@
 
 ## v1.0.0 – Erstveröffentlichung
 
-### 🚀 Funktionen
+### Funktionen
 - Lokale Auslesung über das WEM Web-Interface
 - MQTT Discovery (Home Assistant kompatibel)
 - Wärmepumpe
@@ -16,7 +16,7 @@
 - Tagesstatistik
 - MQTT API v1/v2 Kompatibilität
 
-### 🛠 Verbesserungen
+### Verbesserungen
 - Robuste HTTP-Fehlerbehandlung
 - Session Recovery
 - Discovery-Steuerung
