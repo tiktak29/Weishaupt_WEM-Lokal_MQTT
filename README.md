@@ -1,5 +1,5 @@
 # Weishaupt WEM‑Lokal → MQTT  
-Lokale Auslesung von Weishaupt WEM‑Wärmepumpen über das integrierte Web‑Interface mit MQTT‑Integration und vollständiger Home‑Assistant‑Discovery – komplett ohne Cloud.
+Lokale Auslesung von Weishaupt WEM‑Wärmepumpen über das integrierte Web‑Interface der Weishaupt Regelung mit MQTT‑Integration und vollständiger Home‑Assistant‑Discovery – komplett ohne Cloud.
 
 Gestestet mit Weishaupt Wärmepumpe WAB 14 - Version EC WAB V5.3 R10 - Version WWP-SG V5.0
 
