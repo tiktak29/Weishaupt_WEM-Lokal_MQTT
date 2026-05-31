@@ -114,19 +114,15 @@ Alle Sensoren werden automatisch per MQTT Discovery angelegt.
 
 #### 1. Web-Interface in Steuerung aktivieren: 
 https://community.home-assistant.io/t/weishaupt-heatpump-integration-via-modbus/436823/210?page=13
-
 <br><br>
-  
 #### 2. Web-Interface Benutzer und Kennwort anlegen
 Lokale IP (Beispiel: http://192.168.178.xx) der Wärmepumpe im Browser aufrufen, Benutzer anlegen und Passwort vergeben
-
 <br><br>
-  
 #### 3. Web-Interface 4stellige HEX-Zahl ermitteln
 Benutzeroberfläche vom Web-Interface im Browser öffnen. Auswählen: Profimodus → Info → Heizkreis 1
 Oben im Browser wird die URL angezeigt.  
 Beispiel: http://192.168.178.89/settings_export.html?stack=0C00000100000000008000HHHH010002000301,0C000C1900000000000000HHHH020003000401  
-Die im ersten und zweiten Block mit HHHH ist der 4stellige HEX-Code, muss im ersten und zweiten Block der gleiche HEX-Code sein.
+Im ersten und zweiten Block HHHH ist der 4stellige HEX-Code, dieser muss im ersten und zweiten Block der gleiche HEX-Code sein.
 
 ---
 
