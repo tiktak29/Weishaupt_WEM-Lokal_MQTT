@@ -20,9 +20,9 @@ Alle Geräte und Sensoren werden automatisch per **MQTT Discovery** in Home Assi
 
 ## Voraussetzungen
 - Weishaupt Wärmepumpe mit aktueller Software
-- Web-Interface in der Regelung eingeschaltet (siehe unten)
-- Web-Interface Benutzer angelegt (siehe unten)
-- Web-Interface 4stelliger HEX-Code bekannt (siehe unten)  
+- Web-Interface in der Regelung eingeschaltet (Vor der Installation sicherstellen, siehe unten)
+- Web-Interface Benutzer angelegt (Vor Installation der sicherstellen, siehe unten)
+- Web-Interface 4stelliger HEX-Code bekannt (Vor der Installation sicherstellen, siehe unten) 
 - Home Assistant  
 - MQTT‑Broker (z. B. Mosquitto)  
 
@@ -52,7 +52,7 @@ Automatische Erstellung aller Geräte und Sensoren in Home Assistant:
 ### **Stabilität & Zuverlässigkeit**
 - Retry‑System bei leeren Antworten  
 - Session Recovery  
-- Round‑Robin‑Abfrage (schont die WEM‑Weboberfläche)  
+- Round‑Robin‑Abfrage (entlastet das Web-interface)  
 - Optionaler Last‑Will (online/offline)
 
 ---
