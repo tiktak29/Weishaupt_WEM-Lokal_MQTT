@@ -22,7 +22,7 @@ Alle Geräte und Sensoren werden automatisch per **MQTT Discovery** in Home Assi
 - Weishaupt Wärmepumpe mit aktueller Software
 - Web-Interface in der Regelung eingeschaltet (siehe unten)
 - Web-Interface Benutzer angelegt (siehe unten)
-- Web-Interface 4stelliger HEX-Code (siehe unten)  
+- Web-Interface 4stelliger HEX-Code bekannt (siehe unten)  
 - Home Assistant  
 - MQTT‑Broker (z. B. Mosquitto)  
 
