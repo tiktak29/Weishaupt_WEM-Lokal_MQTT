@@ -4,8 +4,8 @@ Lokale Auslesung von Weishaupt WEM‑Wärmepumpen über das integrierte Web‑In
 ---
 
 ## Überblick
-Dieses Home‑Assistant‑Add‑on liest alle relevanten Daten einer **Weishaupt WEM‑Wärmepumpe** direkt über das **lokale Web‑Interface** aus und stellt sie über **MQTT** bereit.  
-Alle Geräte und Sensoren werden automatisch per **MQTT Discovery** in Home Assistant angelegt.
+Diese Home‑Assistant App (vorher Add‑on) liest alle relevanten Daten einer **Weishaupt Wärmepumpe** direkt über das **lokale Web‑Interface** der Steuerung aus und stellt sie über **MQTT** bereit.  
+Alle Geräte und Sensoren werden automatisch per **MQTT Discovery** in Home Assistant angelegt. 
 
 ✔ Keine Cloud  
 ✔ Keine API‑Keys  
