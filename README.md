@@ -122,7 +122,8 @@ Lokale IP (Beispiel: http://192.168.178.xx) der Wärmepumpe im Browser aufrufen,
 
 #### 3. Web-Interface 4stellige HEX-Zahl ermitteln
 Benutzeroberfläche vom Web-Interface im Browser öffnen. Auswählen: Profimodus → Info → Heizkreis 1
-Oben im Browser wird die URL angezeigt. Beispiel: http://192.168.178.89/settings_export.html?stack=0C00000100000000008000HHHH010002000301,0C000C1900000000000000HHHH020003000401
+Oben im Browser wird die URL angezeigt. 
+Beispiel: http://192.168.178.89/settings_export.html?stack=0C00000100000000008000HHHH010002000301,0C000C1900000000000000HHHH020003000401
 Die im ersten und zweiten Block mit HHHH gekennzeichneten Beispiel ist der 4stellige HEX-Code, muss im ersten und zweiten Block gleich sein.
 
 
