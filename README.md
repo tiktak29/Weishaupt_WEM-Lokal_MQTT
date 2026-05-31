@@ -122,7 +122,7 @@ Repository‑URL: https://github.com/tiktak29/Weishaupt_WEM-Lokal_MQTT
 ---
 ## Wichtiger Hinweis
 
-⚠️ Während die App läuft, sollte nicht gleichzeitig über einen Webbrowser auf das Web-Interface zugegriffen werden.
+⚠️ Während die App läuft sollte nicht gleichzeitig über einen Webbrowser auf das Web-Interface zugegriffen werden.
 
 Parallele Datenabfragen können das Web-Interface der Wärmepumpe instabil machen.
 
