@@ -31,7 +31,7 @@ Alle Geräte und Sensoren werden automatisch per **MQTT Discovery** in Home Assi
 ## Funktionen
 
 ### **Lokale Kommunikation**
-- Zugriff direkt über das WEM‑Web‑Interface  
+- Zugriff direkt über das integrierte Web‑Interface
 - Keine Internetverbindung erforderlich  
 - Robuste HTTP‑Fehlerbehandlung  
 - Automatische Wiederanmeldung bei Session‑Timeout
@@ -44,7 +44,7 @@ Automatische Erstellung aller Geräte und Sensoren in Home Assistant:
 - Heizkreis 2  
 - Statistik  
 - Zweite WEZ  
-- Tagesstatistik  
+- Tagesstatistik im Log 
 - Modell‑Erkennung  
 - Dynamische Geräteaktivierung  
 - MQTT API v1/v2 kompatibel  
@@ -104,8 +104,7 @@ Repository‑URL: https://github.com/tiktak29/Weishaupt_WEM-Lokal_MQTT
 - Heizkreis 1  
 - Heizkreis 2  
 - Statistik  
-- Zweite WEZ  
-- Tagesstatistik  
+- Zweite WEZ   
 
 Alle Sensoren werden automatisch per MQTT Discovery angelegt.
 
