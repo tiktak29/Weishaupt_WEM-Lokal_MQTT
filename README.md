@@ -1,3 +1,7 @@
+<p align="center" style="padding-top: 40px;">
+  <img src="wem_mqtt_unified/logo.png" alt="WEM Lokal MQTT Logo" style="max-width: 450px; width: 18%; height: auto;">
+</p>
+
 # Weishaupt WEM‑Lokal → MQTT  
 
 ![Version](https://img.shields.io/badge/version-v1.0.0-blue)
