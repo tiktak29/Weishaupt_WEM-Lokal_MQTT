@@ -48,7 +48,7 @@ Alle Geräte und Sensoren werden automatisch per **MQTT Discovery** in Home Assi
 - Heizkreis 1  
 - Heizkreis 2  
 - Statistik  
-- Zweite WEZ  
+- 2.WEZ  
 
 ### Zuverlässigkeit
 - Automatische Wiederanmeldung bei Session-Verlust  
@@ -81,6 +81,8 @@ Repository‑URL: https://github.com/tiktak29/Weishaupt_WEM-Lokal_MQTT
 - Konfigurieren  
 - Starten  
 - Logs prüfen  
+
+![Log beim Start](images/Log%20beim%20Start.JPG)
 
 ---
 
