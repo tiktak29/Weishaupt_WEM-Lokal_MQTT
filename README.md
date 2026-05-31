@@ -115,10 +115,10 @@ Repository‑URL: https://github.com/tiktak29/Weishaupt_WEM-Lokal_MQTT
 
 ---
 # Wichtig
-## Nicht gleichzeitung mit App und über Browser eine Datenabfrage des Web-Interface durchführen.  
-## Das Web-Interface kann bei gleichzeitiger paralleler Datenabfrage instabil werden.  
-## Das kann dazu führen, dass die Steuerung der Wärmepumpe nicht mehr reagiert, die Wärmepumpe nicht mehr läuft und erst nach einem Reset wieder funktioniert.
-## Also wenn die App läuft nicht über die IP-Adresse und den Browser auf das Web-Interface zugreifen.
+### Nicht gleichzeitung mit App und über Browser eine Datenabfrage des Web-Interface durchführen.  
+### Das Web-Interface kann bei gleichzeitiger paralleler Datenabfrage instabil werden.  
+### Das kann dazu führen, dass die Steuerung der Wärmepumpe nicht mehr reagiert, die Wärmepumpe nicht mehr läuft und erst nach einem Reset wieder funktioniert.
+### Also wenn die App läuft nicht über die IP-Adresse und den Browser auf das Web-Interface zugreifen.
 
 ---
 
