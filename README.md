@@ -126,10 +126,6 @@ Oben im Browser wird die URL angezeigt.
 Beispiel: http://192.168.178.89/settings_export.html?stack=0C00000100000000008000HHHH010002000301,0C000C1900000000000000HHHH020003000401  
 Die im ersten und zweiten Block mit HHHH ist der 4stellige HEX-Code, muss im ersten und zweiten Block der gleiche HEX-Code sein.
 
-
----
-
-
 ---
 
 ## Changelog
