@@ -14,7 +14,7 @@ Alle Geräte und Sensoren werden automatisch per **MQTT Discovery** in Home Assi
 ✔ Keine Cloud  
 ✔ Keine API‑Keys  
 ✔ Keine Abhängigkeiten von Weishaupt‑Servern  
-✔ 100% lokal, schnell und stabil
+✔ 100% lokal
 
 ---
 
