@@ -9,7 +9,7 @@
 - Heizkreis 1
 - Heizkreis 2
 - Statistik
-- 2. WEZ
+- 2.WEZ
 - Retry-System bei leeren Antworten
 - Automatische Wiederanmeldung
 - Modell-Erkennung
