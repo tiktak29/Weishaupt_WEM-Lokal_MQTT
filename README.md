@@ -12,8 +12,11 @@ Lokale Auslesung von Weishaupt Wärmepumpen über das integrierte Web‑Interfac
 ---
 
 ## Überblick
-Diese Home‑Assistant App liest alle relevanten Daten einer **Weishaupt Wärmepumpe** direkt über das **lokale Web‑Interface** der Steuerung aus und stellt sie über **MQTT** bereit.  
-Alle Geräte und Sensoren werden automatisch per **MQTT Discovery** in Home Assistant angelegt. 
+Diese Integration fungiert als lokales Abfrage-Gateway, das die Weishaupt WEM-Weboberfläche ausliest und die Daten über MQTT Discovery an Home Assistant bereitstellt.  
+Alle Geräte und Sensoren werden automatisch per **MQTT Discovery** in Home Assistant angelegt.
+<br>
+#### Weishaupt Web UI → HTTP scraping → Python Gateway → data normalization → MQTT Broker → Discovery → Home Assistant  
+Entwickelt, um Weishaupt Systeme ohne offiziellen API-Zugang in moderne Home Assistant-Umgebungen zu integrieren.
 
 ---
  
@@ -26,7 +29,7 @@ Alle Geräte und Sensoren werden automatisch per **MQTT Discovery** in Home Assi
 
 ## Voraussetzungen
 - Weishaupt Wärmepumpe mit aktueller Software
-- Web-Interface: Ist in der Regelung eingeschaltet (vor Installation der App sicherstellen, siehe unten)
+- Web-Interface: Webserver muss in der Regelung aktiviert sein (vor Installation der App sicherstellen, siehe unten)
 - Web-Interface: Benutzer und Passwort sind angelegt (vor Installation der App sicherstellen, siehe unten)
 - Web-Interface: 4-stelliger HEX-Code ist bekannt (vor Installation der sicherstellen, siehe unten) 
 - Home Assistant  
