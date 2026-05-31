@@ -74,7 +74,7 @@ Alle Geräte und Sensoren werden automatisch per **MQTT Discovery** in Home Assi
 ### **1. Repository hinzufügen**
 In Home Assistant:
 
-**Einstellungen → Apps → App installieren → ⋮ → Repositories**
+**Einstellungen → Apps → App installieren → ⋮ → Repositories → Hinzufügen → URL eingeben**
 
 Repository‑URL: https://github.com/tiktak29/Weishaupt_WEM-Lokal_MQTT
 
