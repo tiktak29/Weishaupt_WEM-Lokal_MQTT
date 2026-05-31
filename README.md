@@ -5,7 +5,7 @@
 ![MQTT](https://img.shields.io/badge/MQTT-Discovery-orange)
 ![License](https://img.shields.io/badge/license-MIT-brightgreen)  
 
-Lokale Auslesung von Weishaupt WEM‑Wärmepumpen über das integrierte Web‑Interface der Weishaupt Regelung mit MQTT‑Integration und vollständiger Home‑Assistant‑Discovery – komplett ohne Cloud.
+Lokale Auslesung von Weishaupt Wärmepumpen über das integrierte Web‑Interface der Weishaupt Regelung mit MQTT‑Integration und vollständiger Home‑Assistant‑Discovery – komplett ohne Cloud.
 
 #### Getestet mit einer Weishaupt WAB 14 (EC WAB V5.3 R10 / WWP-SG V5.0)
 
