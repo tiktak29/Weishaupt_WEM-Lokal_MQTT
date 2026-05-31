@@ -27,33 +27,42 @@ Alle Geräte und Sensoren werden automatisch per **MQTT Discovery** in Home Assi
 - MQTT‑Broker (z. B. Mosquitto)  
 
 ---
-
 ## Funktionen
 
-### **Lokale Kommunikation**
-- Zugriff direkt über das integrierte Web‑Interface
-- Keine Internetverbindung erforderlich  
-- Robuste HTTP‑Fehlerbehandlung  
-- Automatische Wiederanmeldung bei Session‑Timeout
+### Lokale Kommunikation
+- Direkter Zugriff auf die Weishaupt-Regelung über das integrierte Web-Interface  
+- Keine Cloud-Anbindung erforderlich  
+- Keine API-Schlüssel oder Herstellerkonten notwendig  
+- Keine Internetverbindung für den Betrieb erforderlich  
+- Direkte Kommunikation innerhalb des lokalen Netzwerks  
 
-### **MQTT Discovery**
-Automatische Erstellung aller Geräte und Sensoren in Home Assistant:
+### Home Assistant Integration
+- Vollständige MQTT Discovery  
+- Automatische Erstellung aller Geräte und Sensoren  
+- Automatische Gerätezuordnung in Home Assistant  
+- Automatische Aktualisierung von Sensoren und Entitäten  
+- Unterstützung für aktuelle und ältere MQTT-Bibliotheken (paho-mqtt API v1/v2)  
 
+### Unterstützte Geräte
 - Wärmepumpe  
 - Heizkreis 1  
 - Heizkreis 2  
 - Statistik  
 - Zweite WEZ  
-- Tagesstatistik im Log 
-- Modell‑Erkennung  
-- Dynamische Geräteaktivierung  
-- MQTT API v1/v2 kompatibel  
 
-### **Stabilität & Zuverlässigkeit**
-- Retry‑System bei leeren Antworten  
-- Session Recovery  
-- Round‑Robin‑Abfrage (entlastet das Web-Interface)  
-- Optionaler Last‑Will (online/offline)
+### Zuverlässigkeit
+- Automatische Wiederanmeldung bei Session-Verlust  
+- Retry-Mechanismus bei leeren oder unvollständigen Antworten  
+- Robuste HTTP-Fehlerbehandlung  
+- Automatische Wiederherstellung nach Kommunikationsfehlern  
+- Round-Robin-Abfrage zur Entlastung des Web-Interfaces  
+
+### Erweiterte Funktionen
+- Automatische Modell-Erkennung der Wärmepumpe 
+- Dynamische Aktivierung einzelner Gerätebereiche  
+- Tägliche Kommunikations- und Erfolgsstatistik im Log  
+- Optionaler MQTT Availability-/Last-Will-Status (online/offline)  
+- Vollständig lokaler Betrieb ohne externe Abhängigkeiten  
 
 ---
 
