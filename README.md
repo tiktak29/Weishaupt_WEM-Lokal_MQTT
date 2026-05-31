@@ -52,7 +52,7 @@ Automatische Erstellung aller Geräte und Sensoren in Home Assistant:
 ### **Stabilität & Zuverlässigkeit**
 - Retry‑System bei leeren Antworten  
 - Session Recovery  
-- Round‑Robin‑Abfrage (entlastet das Web-interface)  
+- Round‑Robin‑Abfrage (entlastet das Web-Interface)  
 - Optionaler Last‑Will (online/offline)
 
 ---
@@ -81,7 +81,7 @@ Repository‑URL: https://github.com/tiktak29/Weishaupt_WEM-Lokal_MQTT
 
 | Parameter | Beschreibung |
 |----------|--------------|
-| `webinterface_ip_address` | IP Steuerung |
+| `webinterface_ip_address` | IP-Adresse Webinterface |
 | `webinterface_username` | Benutzername |
 | `webinterface_password` | Passwort |
 | `webinterface_hex_code` | HEX‑Code aus der URL Webinterface |
@@ -115,8 +115,10 @@ Alle Sensoren werden automatisch per MQTT Discovery angelegt.
 #### 1. Web-Interface in Steuerung aktivieren: 
 https://community.home-assistant.io/t/weishaupt-heatpump-integration-via-modbus/436823/210?page=13
 
+
 #### 2. Web-Interface Benutzer und Kennwort anlegen
 Lokale IP (Beispiel: http://192.168.178.xx) der Wärmepumpe im Browser aufrufen, Benutzer anlegen und Passwort vergeben
+
 
 #### 3. Web-Interface 4stellige HEX-Zahl ermitteln
 Benutzeroberfläche vom Web-Interface im Browser öffnen. Auswählen: Profimodus → Info → Heizkreis 1
