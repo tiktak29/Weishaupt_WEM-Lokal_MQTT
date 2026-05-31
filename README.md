@@ -1,7 +1,7 @@
 # Weishaupt WEM‑Lokal → MQTT  
 Lokale Auslesung von Weishaupt WEM‑Wärmepumpen über das integrierte Web‑Interface der Weishaupt Regelung mit MQTT‑Integration und vollständiger Home‑Assistant‑Discovery – komplett ohne Cloud.
 
-#### Getestet mit Weishaupt Wärmepumpe WAB 14 - Version EC WAB V5.3 R10 - Version WWP-SG V5.0
+#### Getestet mit einer Weishaupt WAB 14 (EC WAB V5.3 R10 / WWP-SG V5.0)
 
 ---
 
@@ -22,7 +22,7 @@ Alle Geräte und Sensoren werden automatisch per **MQTT Discovery** in Home Assi
 - Weishaupt Wärmepumpe mit aktueller Software
 - Web-Interface: Ist in der Regelung eingeschaltet (vor der Installation sicherstellen, siehe unten)
 - Web-Interface: Benutzer und Passwort sind angelegt (vor Installation der sicherstellen, siehe unten)
-- Web-Interface: 4stelliger HEX-Code ist bekannt (vor der Installation sicherstellen, siehe unten) 
+- Web-Interface: 4-stelliger HEX-Code ist bekannt (vor der Installation sicherstellen, siehe unten) 
 - Home Assistant  
 - MQTT‑Broker (z. B. Mosquitto)  
 
@@ -122,7 +122,7 @@ Parallele Datenabfragen können das Web-Interface der Wärmepumpe instabil mache
 
 In Einzelfällen kann dies dazu führen, dass die Regelung nicht mehr reagiert und die Wärmepumpe erst nach einem Neustart der Steuerung wieder in Betrieb geht und erreichbar ist.
 
-Daher wird empfohlen, während des Betriebs des Add-ons keine zusätzlichen Browserzugriffe auf das Web-Interface durchzuführen.
+Daher wird empfohlen, während des Betriebs der App keine zusätzlichen Browserzugriffe auf das Web-Interface durchzuführen.
 
 ---
 
@@ -132,14 +132,14 @@ Daher wird empfohlen, während des Betriebs des Add-ons keine zusätzlichen Brow
 ## 2. Web-Interface Benutzer und Kennwort anlegen
 Lokale IP (Beispiel: http://192.168.178.xx) der Wärmepumpe im Browser aufrufen, Benutzer anlegen und Passwort vergeben
 <br><br>
-## 3. Web-Interface 4stellige HEX-Zahl ermitteln
+## 3. Web-Interface 4-stellige HEX-Zahl ermitteln
 Benutzeroberfläche vom Web-Interface im Browser öffnen.  
 Auswählen: Profimodus → Info → Heizkreis 1
 Oben im Browser wird die URL angezeigt.  
 Beispiel: http://192.168.178.89/settings_export.html?stack=0C00000100000000008000HHHH010002000301,0C000C1900000000000000HHHH020003000401  
-Im ersten und zweiten Block HHHH ist der 4stellige HEX-Code.  
+Im ersten und zweiten Block HHHH ist der 4-stellige HEX-Code.  
 
-Der vierstellige HEX-Code muss in beiden URL-Blöcken identisch sein und wird in der App-Konfiguration als webinterface_hex_code eingetragen.
+Der 4-stellige HEX-Code muss in beiden URL-Blöcken identisch sein und wird in der App-Konfiguration als webinterface_hex_code eingetragen.
 
 ![HEX-Code Beispiel](images/hex-code-example.jpg)
 
