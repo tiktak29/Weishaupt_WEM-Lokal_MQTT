@@ -64,6 +64,8 @@ Alle Geräte und Sensoren werden automatisch per **MQTT Discovery** in Home Assi
 - Optionaler MQTT Availability-/Last-Will-Status (online/offline)  
 - Vollständig lokaler Betrieb ohne externe Abhängigkeiten  
 
+![Dashboard](images/Dashboard.JPG)
+
 ---
 
 ## Installation
