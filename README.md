@@ -1,7 +1,7 @@
 # Weishaupt WEM‑Lokal → MQTT  
 Lokale Auslesung von Weishaupt WEM‑Wärmepumpen über das integrierte Web‑Interface der Weishaupt Regelung mit MQTT‑Integration und vollständiger Home‑Assistant‑Discovery – komplett ohne Cloud.
 
-#### Gestestet mit Weishaupt Wärmepumpe WAB 14 - Version EC WAB V5.3 R10 - Version WWP-SG V5.0
+#### Getestet mit Weishaupt Wärmepumpe WAB 14 - Version EC WAB V5.3 R10 - Version WWP-SG V5.0
 
 ---
 
@@ -20,9 +20,9 @@ Alle Geräte und Sensoren werden automatisch per **MQTT Discovery** in Home Assi
 
 ## Voraussetzungen
 - Weishaupt Wärmepumpe mit aktueller Software
-- Web-Interface in der Regelung eingeschaltet (Vor der Installation sicherstellen, siehe unten)
-- Web-Interface Benutzer angelegt (Vor Installation der sicherstellen, siehe unten)
-- Web-Interface 4stelliger HEX-Code bekannt (Vor der Installation sicherstellen, siehe unten) 
+- Web-Interface: Ist in der Regelung eingeschaltet (vor der Installation sicherstellen, siehe unten)
+- Web-Interface: Benutzer und Passwort sind angelegt (vor Installation der sicherstellen, siehe unten)
+- Web-Interface: 4stelliger HEX-Code ist bekannt (vor der Installation sicherstellen, siehe unten) 
 - Home Assistant  
 - MQTT‑Broker (z. B. Mosquitto)  
 
@@ -116,7 +116,7 @@ Repository‑URL: https://github.com/tiktak29/Weishaupt_WEM-Lokal_MQTT
 ---
 
 ## 1. Web-Interface aktivieren
-Eine Anleitung dazu gibt es hier:
+Eine Anleitung dazu gibt es im Home Assistant Community Forum:
 https://community.home-assistant.io/t/weishaupt-heatpump-integration-via-modbus/436823/210?page=13
 <br><br>
 ## 2. Web-Interface Benutzer und Kennwort anlegen
@@ -156,7 +156,7 @@ Feedback und Verbesserungsvorschläge sind willkommen.
 ---
 
 ##  Haftungsausschluss
-Die Entwickler dieses Projekts stehen in keiner Verbindung zur Weishaupt GmbH.  
+Dieses Projekt steht in keiner Verbindung zur Weishaupt GmbH. 
 Die Integration wurde als Open‑Source‑Projekt in der Freizeit auf Basis öffentlich zugänglicher Informationen entwickelt.  
 Die Nutzung erfolgt auf eigenes Risiko und in eigener Verantwortung.  
 Für Schäden oder Fehlfunktionen, die durch die Nutzung dieser App entstehen, übernehmen die Entwickler keinerlei Haftung.
