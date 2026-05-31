@@ -156,7 +156,7 @@ Feedback und Verbesserungsvorschläge sind willkommen.
 ---
 
 ##  Haftungsausschluss
-Die Entwickler dieses Projekts stehen in ##keiner Verbindung zur Weishaupt GmbH##.
+Die Entwickler dieses Projekts stehen in keiner Verbindung zur Weishaupt GmbH.  
 Die Integration wurde als Open‑Source‑Projekt in der Freizeit auf Basis öffentlich zugänglicher Informationen entwickelt.  
 Die Nutzung erfolgt auf eigenes Risiko und in eigener Verantwortung.  
 Für Schäden oder Fehlfunktionen, die durch die Nutzung dieser App entstehen, übernehmen die Entwickler keinerlei Haftung.
