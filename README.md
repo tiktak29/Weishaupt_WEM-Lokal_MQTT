@@ -1,4 +1,9 @@
 # Weishaupt WEM‑Lokal → MQTT  
+
+![Version](https://img.shields.io/badge/version-v1.0.0-blue)
+![Home Assistant](https://img.shields.io/badge/Home%20Assistant-App-green)
+![MQTT](https://img.shields.io/badge/MQTT-Discovery-orange)
+![License](https://img.shields.io/badge/license-MIT-brightgreen)  
 Lokale Auslesung von Weishaupt WEM‑Wärmepumpen über das integrierte Web‑Interface der Weishaupt Regelung mit MQTT‑Integration und vollständiger Home‑Assistant‑Discovery – komplett ohne Cloud.
 
 #### Getestet mit einer Weishaupt WAB 14 (EC WAB V5.3 R10 / WWP-SG V5.0)
