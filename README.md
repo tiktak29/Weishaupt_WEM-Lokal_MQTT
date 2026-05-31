@@ -120,8 +120,10 @@ Auswählen: Profimodus → Info → Heizkreis 1
 Oben im Browser wird die URL angezeigt.  
 Beispiel: http://192.168.178.89/settings_export.html?stack=0C00000100000000008000HHHH010002000301,0C000C1900000000000000HHHH020003000401  
 Im ersten und zweiten Block HHHH ist der 4stellige HEX-Code.  
-Der vierstellige HEX-Code muss in beiden URL-Blöcken identisch sein und wird in der Add-on-Konfiguration als webinterface_hex_code eingetragen.
 
+Der vierstellige HEX-Code muss in beiden URL-Blöcken identisch sein und wird in der App-Konfiguration als webinterface_hex_code eingetragen.
+
+![HEX-Code Beispiel](images/HEX-Code%20WEM-Lokal%20Browser.JPG)
 ---
 
 ## Changelog
