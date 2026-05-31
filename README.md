@@ -4,6 +4,7 @@
 ![Home Assistant](https://img.shields.io/badge/Home%20Assistant-App-green)
 ![MQTT](https://img.shields.io/badge/MQTT-Discovery-orange)
 ![License](https://img.shields.io/badge/license-MIT-brightgreen)  
+
 Lokale Auslesung von Weishaupt WEM‑Wärmepumpen über das integrierte Web‑Interface der Weishaupt Regelung mit MQTT‑Integration und vollständiger Home‑Assistant‑Discovery – komplett ohne Cloud.
 
 #### Getestet mit einer Weishaupt WAB 14 (EC WAB V5.3 R10 / WWP-SG V5.0)
@@ -25,9 +26,9 @@ Alle Geräte und Sensoren werden automatisch per **MQTT Discovery** in Home Assi
 
 ## Voraussetzungen
 - Weishaupt Wärmepumpe mit aktueller Software
-- Web-Interface: Ist in der Regelung eingeschaltet (vor der Installation sicherstellen, siehe unten)
-- Web-Interface: Benutzer und Passwort sind angelegt (vor Installation der sicherstellen, siehe unten)
-- Web-Interface: 4-stelliger HEX-Code ist bekannt (vor der Installation sicherstellen, siehe unten) 
+- Web-Interface: Ist in der Regelung eingeschaltet (vor Installation der App sicherstellen, siehe unten)
+- Web-Interface: Benutzer und Passwort sind angelegt (vor Installation der App sicherstellen, siehe unten)
+- Web-Interface: 4-stelliger HEX-Code ist bekannt (vor Installation der sicherstellen, siehe unten) 
 - Home Assistant  
 - MQTT‑Broker (z. B. Mosquitto)  
 
@@ -170,8 +171,11 @@ Feedback und Verbesserungsvorschläge sind willkommen.
 
 ---
 
+<br><br>
+  
 ##  Haftungsausschluss
 Dieses Projekt ist ein unabhängiges Open-Source-Projekt und steht in keiner Verbindung zur Weishaupt GmbH.
+
 Die App wurde in der Freizeit auf Basis öffentlich zugänglicher Informationen entwickelt.  
 Die Nutzung erfolgt auf eigenes Risiko und in eigener Verantwortung.  
 Für Schäden oder Fehlfunktionen, die durch die Nutzung dieser App entstehen, übernehmen die Entwickler keinerlei Haftung.
