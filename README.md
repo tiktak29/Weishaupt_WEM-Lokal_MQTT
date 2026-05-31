@@ -1,16 +1,30 @@
 # Weishaupt WEM‑Lokal → MQTT  
 Lokale Auslesung von Weishaupt WEM‑Wärmepumpen über das integrierte Web‑Interface mit MQTT‑Integration und vollständiger Home‑Assistant‑Discovery – komplett ohne Cloud.
 
+Gestestet mit Weishaupt Wärmepumpe WAB 14 - Version EC WAB V5.3 R10 - Version WWP-SG V5.0
+
 ---
 
 ## Überblick
 Diese Home‑Assistant App (vorher Add‑on) liest alle relevanten Daten einer **Weishaupt Wärmepumpe** direkt über das **lokale Web‑Interface** der Steuerung aus und stellt sie über **MQTT** bereit.  
 Alle Geräte und Sensoren werden automatisch per **MQTT Discovery** in Home Assistant angelegt. 
 
+---
+ 
 ✔ Keine Cloud  
 ✔ Keine API‑Keys  
 ✔ Keine Abhängigkeiten von Weishaupt‑Servern  
 ✔ 100% lokal, schnell und stabil
+
+---
+
+## Voraussetzungen
+- Weishaupt Wärmepumpe mit aktueller Software
+- Web-interace in der Regelung eingeschaltet (siehe unten)
+- Web-Interface Benutzer angelegt (siehe unten)
+- Web-Interface 4stelliger HEX-Code (siehe unten)  
+- Home Assistant  
+- MQTT‑Broker (z. B. Mosquitto)  
 
 ---
 
@@ -40,13 +54,6 @@ Automatische Erstellung aller Geräte und Sensoren in Home Assistant:
 - Session Recovery  
 - Round‑Robin‑Abfrage (schont die WEM‑Weboberfläche)  
 - Optionaler Last‑Will (online/offline)
-
----
-
-## Voraussetzungen
-- Weishaupt WEM‑System mit lokalem Web‑Interface  
-- Home Assistant  
-- MQTT‑Broker (z. B. Mosquitto)  
 
 ---
 
