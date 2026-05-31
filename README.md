@@ -20,7 +20,7 @@ Alle Geräte und Sensoren werden automatisch per **MQTT Discovery** in Home Assi
 
 ## Voraussetzungen
 - Weishaupt Wärmepumpe mit aktueller Software
-- Web-interace in der Regelung eingeschaltet (siehe unten)
+- Web-interface in der Regelung eingeschaltet (siehe unten)
 - Web-Interface Benutzer angelegt (siehe unten)
 - Web-Interface 4stelliger HEX-Code (siehe unten)  
 - Home Assistant  
