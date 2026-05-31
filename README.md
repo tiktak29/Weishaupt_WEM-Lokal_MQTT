@@ -146,16 +146,18 @@ Siehe: [LICENSE](./LICENSE)
 
 ---
 
-## Hinweis
-
-Dies ist ein **inoffizielles Open‑Source‑Projekt**.  
-Es besteht **keine Verbindung zur Weishaupt GmbH**.
-
----
-
 ## Danke
 
 Danke an alle, die dieses Projekt testen, verbessern und erweitern.  
 Feedback und Verbesserungsvorschläge sind willkommen.
 
+---
+
+##  Haftungsausschluss
+Die Entwickler dieses Projekts stehen in ##keiner Verbindung zur Weishaupt GmbH.##  
+Die Integration wurde als Open‑Source‑Projekt in der Freizeit auf Basis öffentlich zugänglicher Informationen entwickelt.  
+Die Nutzung erfolgt auf eigenes Risiko und in eigener Verantwortung.  
+Für Schäden oder Fehlfunktionen, die durch die Nutzung dieser Integration entstehen, übernehmen die Entwickler keinerlei Haftung.
+
+---
 
