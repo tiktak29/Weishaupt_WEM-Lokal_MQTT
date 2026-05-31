@@ -109,8 +109,9 @@ Repository‑URL: https://github.com/tiktak29/Weishaupt_WEM-Lokal_MQTT
 | `enable_stats` | Statistik |
 | `enable_wez2` | 2.WEZ |
 
-![Konfiguration 1](images/Konfiguration%201.JPG)
-![Konfiguration 2](images/Konfiguration%201.JPG)
+![Konfiguration 1](images/1.Konfiguration.JPG)
+![Konfiguration 2](images/2.Konfiguration.JPG)
+
 ---
 
 ## 1. Web-Interface aktivieren
