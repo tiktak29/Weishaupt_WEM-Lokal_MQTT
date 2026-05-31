@@ -95,7 +95,7 @@ Repository‑URL: https://github.com/tiktak29/Weishaupt_WEM-Lokal_MQTT
 
 | Parameter | Beschreibung |
 |----------|--------------|
-| `webinterface_ip_address` | IP-Adresse Webinterface |
+| `webinterface_ip_address` | IP-Adresse Web-Interface |
 | `webinterface_username` | Benutzername |
 | `webinterface_password` | Passwort |
 | `webinterface_hex_code` | HEX‑Code aus der URL Webinterface |
