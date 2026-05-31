@@ -94,7 +94,7 @@ Repository‑URL: https://github.com/tiktak29/Weishaupt_WEM-Lokal_MQTT
 | `enable_hk1` | Heizkreis 1 |
 | `enable_hk2` | Heizkreis 2 |
 | `enable_stats` | Statistik |
-| `enable_wez2` | 2. WEZ |
+| `enable_wez2` | 2.WEZ |
 
 ---
 
@@ -104,7 +104,7 @@ Repository‑URL: https://github.com/tiktak29/Weishaupt_WEM-Lokal_MQTT
 - Heizkreis 1  
 - Heizkreis 2  
 - Statistik  
-- 2. WEZ   
+- 2.WEZ   
 
 Alle Sensoren werden automatisch per MQTT Discovery angelegt.
 
