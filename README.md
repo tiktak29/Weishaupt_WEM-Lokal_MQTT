@@ -65,7 +65,7 @@ Alle Geräte und Sensoren werden automatisch per **MQTT Discovery** in Home Assi
 - Optionaler MQTT Availability-/Last-Will-Status (online/offline)  
 - Vollständig lokaler Betrieb ohne externe Abhängigkeiten  
 
-![Dashboard](images/Dashboard.JPG)
+![Dashboard](images/dashboard.jpg)
 
 ---
 
@@ -85,7 +85,7 @@ Repository‑URL: https://github.com/tiktak29/Weishaupt_WEM-Lokal_MQTT
 - Starten  
 - Logs prüfen  
 
-![Log beim Start](images/Log%20beim%20Start.JPG)
+![Log beim Start](images/startup-log.jpg)
 
 ---
 
@@ -110,8 +110,8 @@ Repository‑URL: https://github.com/tiktak29/Weishaupt_WEM-Lokal_MQTT
 | `enable_stats` | Statistik |
 | `enable_wez2` | 2.WEZ |
 
-![Konfiguration 1](images/1.Konfiguration.JPG)
-![Konfiguration 2](images/2.Konfiguration.JPG)
+![Konfiguration 1](images/config-1.jpg)
+![Konfiguration 2](images/config-2.jpg)
 
 ---
 # Wichtig
@@ -138,7 +138,7 @@ Im ersten und zweiten Block HHHH ist der 4stellige HEX-Code.
 
 Der vierstellige HEX-Code muss in beiden URL-Blöcken identisch sein und wird in der App-Konfiguration als webinterface_hex_code eingetragen.
 
-![HEX-Code Beispiel](images/HEX-Code%20WEM-Lokal%20Browser.JPG)
+![HEX-Code Beispiel](images/hex-code-example.jpg)
 
 ---
 
