@@ -3,6 +3,7 @@
   "version": "1.0.0",
   "slug": "wem_mqtt_unified",
   "description": "Weishaupt Web-Interface: Wärmepumpe, HK1, HK2, Statistik, 2. WEZ",
+  "url": "https://github.com/tiktak29/Weishaupt_WEM-Lokal_MQTT",
   "startup": "services",
   "boot": "auto",
   "host_network": false,
