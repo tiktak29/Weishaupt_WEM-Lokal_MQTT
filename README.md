@@ -6,7 +6,7 @@ Lokale Auslesung von Weishaupt WEM‑Wärmepumpen über das integrierte Web‑In
 ---
 
 ## Überblick
-Diese Home‑Assistant App (vorher Add‑on) liest alle relevanten Daten einer **Weishaupt Wärmepumpe** direkt über das **lokale Web‑Interface** der Steuerung aus und stellt sie über **MQTT** bereit.  
+Diese Home‑Assistant App liest alle relevanten Daten einer **Weishaupt Wärmepumpe** direkt über das **lokale Web‑Interface** der Steuerung aus und stellt sie über **MQTT** bereit.  
 Alle Geräte und Sensoren werden automatisch per **MQTT Discovery** in Home Assistant angelegt. 
 
 ---
@@ -27,6 +27,7 @@ Alle Geräte und Sensoren werden automatisch per **MQTT Discovery** in Home Assi
 - MQTT‑Broker (z. B. Mosquitto)  
 
 ---
+
 ## Funktionen
 
 ### Lokale Kommunikation
@@ -131,6 +132,7 @@ Im ersten und zweiten Block HHHH ist der 4stellige HEX-Code.
 Der vierstellige HEX-Code muss in beiden URL-Blöcken identisch sein und wird in der App-Konfiguration als webinterface_hex_code eingetragen.
 
 ![HEX-Code Beispiel](images/HEX-Code%20WEM-Lokal%20Browser.JPG)
+
 ---
 
 ## Changelog
