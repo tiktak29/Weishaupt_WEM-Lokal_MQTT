@@ -107,18 +107,6 @@ Repository‑URL: https://github.com/tiktak29/Weishaupt_WEM-Lokal_MQTT
 
 ---
 
-## Unterstützte Geräte
-
-- Wärmepumpe  
-- Heizkreis 1  
-- Heizkreis 2  
-- Statistik  
-- 2.WEZ   
-
-Alle Sensoren werden automatisch per MQTT Discovery angelegt.
-
----
-
 ## 1. Web-Interface aktivieren
 Eine Anleitung dazu gibt es hier:
 https://community.home-assistant.io/t/weishaupt-heatpump-integration-via-modbus/436823/210?page=13
