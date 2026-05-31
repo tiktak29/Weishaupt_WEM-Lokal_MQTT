@@ -127,8 +127,7 @@ Daher wird empfohlen, während des Betriebs des Add-ons keine zusätzlichen Brow
 ---
 
 ## 1. Web-Interface aktivieren
-Eine Anleitung dazu gibt es im Home Assistant Community Forum:
-https://community.home-assistant.io/t/weishaupt-heatpump-integration-via-modbus/436823/210?page=13
+[Anleitung im Home Assistant Community Forum](https://community.home-assistant.io/t/weishaupt-heatpump-integration-via-modbus/436823/210?page=13)
 <br><br>
 ## 2. Web-Interface Benutzer und Kennwort anlegen
 Lokale IP (Beispiel: http://192.168.178.xx) der Wärmepumpe im Browser aufrufen, Benutzer anlegen und Passwort vergeben
