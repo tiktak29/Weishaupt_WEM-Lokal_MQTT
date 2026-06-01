@@ -16,7 +16,7 @@ Lokale Auslesung von Weishaupt Wärmepumpen über das integrierte Web‑Interfac
 ---
 
 ## Überblick
-Diese Integration fungiert als lokales Abfrage-Gateway, das die Weishaupt WEM-Weboberfläche ausliest und die Daten über MQTT Discovery an Home Assistant bereitstellt.  
+Diese Integration fungiert als lokales Abfrage-Gateway, das die lokale Weishaupt WEM-Weboberfläche ausliest und die Daten über MQTT Discovery an Home Assistant bereitstellt.  
 Alle Geräte und Sensoren werden automatisch per **MQTT Discovery** in Home Assistant angelegt.
 <br>
 #### Weishaupt Web UI → HTTP scraping → Python Gateway → data normalization → MQTT Broker → Discovery → Home Assistant  
