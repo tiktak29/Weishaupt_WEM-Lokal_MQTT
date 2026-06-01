@@ -1,5 +1,5 @@
 #!/bin/bash
 
-echo "🚀 Starte Weishaupt Web-Interface Abfrage..."
+echo "🚀 Starting Weishaupt Web-Interface polling..."
 
 python3 /app/script.py
