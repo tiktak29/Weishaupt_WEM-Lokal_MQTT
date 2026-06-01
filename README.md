@@ -97,10 +97,8 @@ https://github.com/tiktak29/Weishaupt_WEM-Lokal_MQTT
 - Install  
 - Configure  
 - Start  
-- Check logs  
-
-![Startup Log](images/startup-log.jpg)
-
+- Check logs
+  
 ---
 
 ## Configuration
@@ -126,6 +124,7 @@ https://github.com/tiktak29/Weishaupt_WEM-Lokal_MQTT
 
 ![Configuration 1](images/config-1.jpg)  
 ![Configuration 2](images/config-2.jpg)
+![Startup Log](images/startup-log.jpg)
 
 ---
 
