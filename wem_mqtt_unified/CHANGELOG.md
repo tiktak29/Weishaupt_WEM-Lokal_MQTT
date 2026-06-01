@@ -1,23 +1,23 @@
 # Changelog
 
-## v1.0.0 – Erstveröffentlichung
+## v1.0.0 – Initial Release
 
-### Funktionen
-- Lokale Auslesung über das WEM Web-Interface
-- MQTT Discovery (Home Assistant kompatibel)
-- Wärmepumpe
-- Heizkreis 1
-- Heizkreis 2
-- Statistik
-- 2.WEZ
-- Retry-System bei leeren Antworten
-- Automatische Wiederanmeldung
-- Modell-Erkennung
-- Tagesstatistik
-- MQTT API v1/v2 Kompatibilität
+### Features
+- Local data extraction via the WEM web interface
+- MQTT Discovery (Home Assistant compatible)
+- Heat pump
+- Heating circuit 1
+- Heating circuit 2
+- Statistics
+- Second auxiliary heater (WEZ2)
+- Retry system for empty responses
+- Automatic session re‑authentication
+- Model detection
+- Daily statistics
+- MQTT API v1/v2 compatibility
 
-### Verbesserungen
-- Robuste HTTP-Fehlerbehandlung
-- Session Recovery
-- Discovery-Steuerung
-- Dynamische Geräteaktivierung
+### Improvements
+- Robust HTTP error handling
+- Session recovery
+- Discovery control
+- Dynamic device activation
