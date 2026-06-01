@@ -87,7 +87,7 @@ Developed to integrate Weishaupt systems into modern Home Assistant environments
 ### **1. Add the repository**
 In Home Assistant:
 
-**Settings → Apps → Install App → ⋮ → Repositories → Add → Enter URL**
+**Settings → Apps → Install App → ⋮ → Repositories → Add → Enter URL → Add**
 
 Repository URL:  
 https://github.com/tiktak29/Weishaupt_WEM-Lokal_MQTT
