@@ -2,81 +2,81 @@
   <img src="wem_mqtt_unified/logo.png" alt="WEM Lokal MQTT Logo" style="max-width: 450px; width: 25%; height: auto;">
 </p>
 
-# Weishaupt WEM‑Lokal → MQTT  
+# Weishaupt WEM‑Local → MQTT  
 
 ![Version](https://img.shields.io/badge/version-v1.0.0-blue)
 ![Home Assistant](https://img.shields.io/badge/Home%20Assistant-App-green)
 ![MQTT](https://img.shields.io/badge/MQTT-Discovery-orange)
 ![License](https://img.shields.io/badge/license-MIT-brightgreen)  
 
-Lokale Auslesung von Weishaupt Wärmepumpen über das integrierte Web‑Interface der Weishaupt Regelung mit MQTT‑Integration und vollständiger Home‑Assistant‑Discovery – komplett ohne Cloud.
+Local data extraction from Weishaupt heat pumps via the integrated Weishaupt controller web interface, with MQTT integration and full Home Assistant Discovery – completely cloud‑free.
 
-#### Getestet mit einer Weishaupt WAB 14 (EC WAB V5.3 R10 / WWP-SG V5.0)
+#### Tested with a Weishaupt WAB 14 (EC WAB V5.3 R10 / WWP‑SG V5.0)
 
 ---
 
-## Überblick
-Diese Integration fungiert als lokales Abfrage-Gateway, das die lokale Weishaupt WEM-Weboberfläche ausliest und die Daten über MQTT Discovery an Home Assistant bereitstellt.  
-Alle Geräte und Sensoren werden automatisch per **MQTT Discovery** in Home Assistant angelegt.
+## Overview
+This integration acts as a local polling gateway that reads data from the Weishaupt WEM web interface and publishes it to Home Assistant via MQTT Discovery.  
+All devices and sensors are automatically created in Home Assistant through **MQTT Discovery**.
 <br>
-#### Weishaupt Web UI → HTTP scraping → Python Gateway → data normalization → MQTT Broker → Discovery → Home Assistant  
-Entwickelt, um Weishaupt Systeme ohne offiziellen API-Zugang in moderne Home Assistant-Umgebungen zu integrieren.
-
----
- 
-✔ Keine Cloud  
-✔ Keine API‑Keys  
-✔ Keine Abhängigkeiten von Weishaupt‑Servern  
-✔ 100% lokal
+#### Weishaupt Web UI → HTTP scraping → Python gateway → data normalization → MQTT broker → Discovery → Home Assistant  
+Developed to integrate Weishaupt systems into modern Home Assistant environments without requiring any official API access.
 
 ---
 
-## Voraussetzungen
-- Weishaupt Wärmepumpe mit aktueller Software
-- Web-Interface: Webserver muss in der Regelung aktiviert sein (vor Installation der App sicherstellen, siehe unten)
-- Web-Interface: Benutzer und Passwort sind angelegt und bekannt (vor Installation der App sicherstellen, siehe unten)
-- Web-Interface: 4-stelliger HEX-Code ist bekannt (vor Installation der App sicherstellen, siehe unten) 
+✔ No cloud  
+✔ No API keys  
+✔ No dependency on Weishaupt servers  
+✔ 100% local operation
+
+---
+
+## Requirements
+- Weishaupt heat pump with up‑to‑date firmware  
+- Web interface: Webserver must be enabled on the controller (ensure before installing the app)  
+- Web interface: Username and password must be created and known (ensure before installing the app)  
+- Web interface: 4‑digit HEX code must be known (ensure before installing the app)  
 - Home Assistant  
-- MQTT‑Broker (z. B. Mosquitto)  
+- MQTT broker (e.g., Mosquitto)  
 
 ---
 
-## Funktionen
+## Features
 
-### Lokale Kommunikation
-- Direkter Zugriff auf die Weishaupt-Regelung über das integrierte Web-Interface  
-- Keine Cloud-Anbindung erforderlich  
-- Keine API-Schlüssel oder Herstellerkonten notwendig  
-- Keine Internetverbindung für den Betrieb erforderlich  
-- Direkte Kommunikation innerhalb des lokalen Netzwerks  
+### Local Communication
+- Direct access to the Weishaupt controller via the integrated web interface  
+- No cloud connection required  
+- No API keys or manufacturer accounts needed  
+- No internet connection required for operation  
+- Direct communication within the local network  
 
 ### Home Assistant Integration
-- Vollständige MQTT Discovery  
-- Automatische Erstellung aller Geräte und Sensoren  
-- Automatische Gerätezuordnung in Home Assistant  
-- Automatische Aktualisierung von Sensoren und Entitäten  
-- Unterstützung für aktuelle und ältere MQTT-Bibliotheken (paho-mqtt API v1/v2)  
+- Full MQTT Discovery support  
+- Automatic creation of all devices and sensors  
+- Automatic device assignment in Home Assistant  
+- Automatic updates of sensors and entities  
+- Support for current and legacy MQTT libraries (paho‑mqtt API v1/v2)  
 
-### Unterstützte Geräte
-- Wärmepumpe  
-- Heizkreis 1  
-- Heizkreis 2  
-- Statistik  
-- 2.WEZ  
+### Supported Devices
+- Heat pump  
+- Heating circuit 1  
+- Heating circuit 2  
+- Statistics  
+- Second auxiliary heater (WEZ2)  
 
-### Zuverlässigkeit
-- Automatische Wiederanmeldung bei Session-Verlust  
-- Retry-Mechanismus bei leeren oder unvollständigen Antworten  
-- Robuste HTTP-Fehlerbehandlung  
-- Automatische Wiederherstellung nach Kommunikationsfehlern  
-- Round-Robin-Abfrage zur Entlastung des Web-Interfaces  
+### Reliability
+- Automatic session re‑authentication  
+- Retry mechanism for empty or incomplete responses  
+- Robust HTTP error handling  
+- Automatic recovery after communication failures  
+- Round‑robin polling to reduce load on the web interface  
 
-### Erweiterte Funktionen
-- Automatische Modell-Erkennung der Wärmepumpe 
-- Dynamische Aktivierung einzelner Gerätebereiche  
-- Tägliche Kommunikations- und Erfolgsstatistik im Log  
-- Optionaler MQTT Availability-/Last-Will-Status (online/offline)  
-- Vollständig lokaler Betrieb ohne externe Abhängigkeiten  
+### Advanced Features
+- Automatic heat pump model detection  
+- Dynamic activation of individual device sections  
+- Daily communication and success statistics in the log  
+- Optional MQTT availability / last‑will status (online/offline)  
+- Fully local operation without external dependencies  
 
 ![Dashboard](images/dashboard.jpg)
 
@@ -84,109 +84,112 @@ Entwickelt, um Weishaupt Systeme ohne offiziellen API-Zugang in moderne Home Ass
 
 ## Installation
 
-### **1. Repository hinzufügen**
+### **1. Add the repository**
 In Home Assistant:
 
-**Einstellungen → Apps → App installieren → ⋮ → Repositories → Hinzufügen → URL eingeben**
+**Settings → Apps → Install App → ⋮ → Repositories → Add → Enter URL**
 
-Repository‑URL: https://github.com/tiktak29/Weishaupt_WEM-Lokal_MQTT
+Repository URL:  
+https://github.com/tiktak29/Weishaupt_WEM-Lokal_MQTT
 
-### **2. App installieren**
-- „Weishaupt WEM‑Lokal MQTT“ auswählen  
-- Installieren
-- Konfigurieren  
-- Starten  
-- Logs prüfen  
+### **2. Install the app**
+- Select “Weishaupt WEM‑Local MQTT”  
+- Install  
+- Configure  
+- Start  
+- Check logs  
 
-![Log beim Start](images/startup-log.jpg)
-
----
-
-## Konfiguration
-
-### **Optionen (config.json)**
-
-| Parameter | Beschreibung |
-|----------|--------------|
-| `webinterface_ip_address` | Web-Interface IP-Adresse |
-| `webinterface_username` | Web-Interface Benutzername |
-| `webinterface_password` | Web-Interface Passwort |
-| `webinterface_hex_code` | Webinterface HEX‑Code 4-stellig aus der URL |
-| `mqtt_broker` | MQTT‑Broker (z. B. core-mosquitto) |
-| `mqtt_port` | MQTT Port |
-| `mqtt_username` | MQTT Benutzername |
-| `mqtt_password` | MQTT Passwort |
-| `polling_seconds` | Abfrageintervall in Sekunden |
-| `enable_wp` | Wärmepumpe |
-| `enable_hk1` | Heizkreis 1 |
-| `enable_hk2` | Heizkreis 2 |
-| `enable_stats` | Statistik |
-| `enable_wez2` | 2.WEZ |
-
-![Konfiguration 1](images/config-1.jpg)
-![Konfiguration 2](images/config-2.jpg)
-
----
-## Wichtiger Hinweis
-
-⚠️ Während die App läuft sollte nicht gleichzeitig über einen Webbrowser auf das Web-Interface zugegriffen werden.
-
-Parallele Datenabfragen können das Web-Interface der Wärmepumpe instabil machen.
-
-In Einzelfällen kann dies dazu führen, dass die Regelung nicht mehr reagiert und die Wärmepumpe erst nach einem Neustart der Steuerung wieder in Betrieb geht und erreichbar ist.
-
-Daher wird empfohlen, während des Betriebs der App keine zusätzlichen Browserzugriffe auf das Web-Interface durchzuführen.
+![Startup Log](images/startup-log.jpg)
 
 ---
 
-## 1. Web-Interface aktivieren
-[Anleitung im Home Assistant Community Forum](https://community.home-assistant.io/t/weishaupt-heatpump-integration-via-modbus/436823/210?page=13)
+## Configuration
+
+### **Options (config.json)**
+
+| Parameter | Description |
+|----------|-------------|
+| `webinterface_ip_address` | Web interface IP address |
+| `webinterface_username` | Web interface username |
+| `webinterface_password` | Web interface password |
+| `webinterface_hex_code` | 4‑digit HEX code from the URL |
+| `mqtt_broker` | MQTT broker (e.g., core‑mosquitto) |
+| `mqtt_port` | MQTT port |
+| `mqtt_username` | MQTT username |
+| `mqtt_password` | MQTT password |
+| `polling_seconds` | Polling interval in seconds |
+| `enable_wp` | Heat pump |
+| `enable_hk1` | Heating circuit 1 |
+| `enable_hk2` | Heating circuit 2 |
+| `enable_stats` | Statistics |
+| `enable_wez2` | Second auxiliary heater (WEZ2) |
+
+![Configuration 1](images/config-1.jpg)  
+![Configuration 2](images/config-2.jpg)
+
+---
+
+## Important Notice
+
+⚠️ While the app is running, you should not access the web interface of the heat pump via a browser at the same time.
+
+Parallel data requests may cause the web interface of the heat pump to become unstable.
+
+In rare cases, this may lead to the controller becoming unresponsive, requiring a restart of the heat pump controller before it becomes operational and reachable again.
+
+Therefore, it is recommended to avoid additional browser access to the web interface while the app is running.
+
+---
+
+## 1. Enable the web interface
+[Instructions in the Home Assistant Community Forum](https://community.home-assistant.io/t/weishaupt-heatpump-integration-via-modbus/436823/210?page=13)
 <br><br>
-## 2. Web-Interface Benutzer und Passwort anlegen
-Lokale IP (Beispiel: http://192.168.178.xx) der Wärmepumpe im Browser aufrufen, Benutzername anlegen und Passwort vergeben.
-Benutzername und Passwort werden in der App-Konfiguration als Web-Interface Benutzername und  Web-Interface Passwort benötigt.
+
+## 2. Create web interface username and password
+Open the local IP address of the heat pump in your browser (e.g., http://192.168.178.xx), create a username and set a password.  
+These credentials are required in the app configuration as the web interface username and password.
 <br><br>
-## 3. Web-Interface 4-stellige HEX-Zahl ermitteln
-Benutzeroberfläche vom Web-Interface im Browser öffnen.  
-Auswählen: Profimodus → Info → Heizkreis 1  
-Oben im Browser wird die URL angezeigt.  
+
+## 3. Determine the 4‑digit HEX code
+Open the web interface in your browser.  
+Navigate to: Expert Mode → Info → Heating Circuit 1  
+The browser will show a URL similar to:
 http://192.168.178.xx/settings_export.html?stack=0C00000100000000008000????010002000301,0C000C1900000000000000????020003000401  
-Im ersten und zweiten Block ???? ist der 4-stellige HEX-Code.  
+The `????` in both blocks represent the 4‑digit HEX code.
 
-Der 4-stellige HEX-Code muss in beiden URL-Blöcken identisch sein und wird in der App-Konfiguration als webinterface_hex_code benötigt.
+The HEX code must be identical in both URL blocks and is required in the app configuration as `webinterface_hex_code`.
 
-![HEX-Code Beispiel](images/hex-code-example.jpg)
+![HEX Code Example](images/hex-code-example.jpg)
 
 ---
 
 ## Changelog
 
-Siehe: [CHANGELOG.md](./CHANGELOG.md)
+See: [CHANGELOG.md](./CHANGELOG.md)
 
 ---
 
-## Lizenz
+## License
 
-Dieses Projekt verwendet die **MIT‑Lizenz**.  
-Siehe: [LICENSE](./LICENSE)
+This project uses the **MIT License**.  
+See: [LICENSE](./LICENSE)
 
 ---
 
-## Danke
+## Thanks
 
-Danke an alle, die dieses Projekt testen, verbessern und erweitern.  
-Feedback und Verbesserungsvorschläge sind willkommen.
+Thanks to everyone who tests, improves, and extends this project.  
+Feedback and suggestions are welcome.
 
 ---
 
 <br><br>
-  
-##  Haftungsausschluss
-Dieses Projekt ist ein unabhängiges Open-Source-Projekt und steht in keiner Verbindung zur Weishaupt GmbH.
 
-Die App wurde in der Freizeit auf Basis öffentlich zugänglicher Informationen entwickelt.  
-Die Nutzung erfolgt auf eigenes Risiko und in eigener Verantwortung.  
-Für Schäden oder Fehlfunktionen, die durch die Nutzung dieser App entstehen, übernehmen die Entwickler keinerlei Haftung.
+## Disclaimer
+This project is an independent open‑source project and is not affiliated with Weishaupt GmbH.
+
+The app was developed in spare time based on publicly available information.  
+Use at your own risk and responsibility.  
+The developers assume no liability for any damage or malfunction caused by the use of this app.
 
 ---
-
