@@ -768,7 +768,7 @@ async def main():
                         stats_day = time.localtime(time.time() - 86400)
 
                         weekday_str = weekday_short[stats_day.tm_wday]
-                        date_str = time.strftime("%d.%m.%Y", stats_day)
+                        date_str = time.strftime("%Y-%m-%d", stats_day)
 
                         logger.info(f"🕒 Creating daily statistics for {weekday_str}, {date_str}")
 
