@@ -1,5 +1,5 @@
 <p align="center" style="padding-top: 40px;">
-  <img src="wem_mqtt_unified/logo.png" alt="WEM Lokal MQTT Logo" style="max-width: 450px; width: 18%; height: auto;">
+  <img src="wem_mqtt_unified/logo.png" alt="WEM Lokal MQTT Logo" style="max-width: 450px; width: 20%; height: auto;">
 </p>
 
 # Weishaupt WEM‑Lokal → MQTT  
@@ -34,7 +34,7 @@ Entwickelt, um Weishaupt Systeme ohne offiziellen API-Zugang in moderne Home Ass
 ## Voraussetzungen
 - Weishaupt Wärmepumpe mit aktueller Software
 - Web-Interface: Webserver muss in der Regelung aktiviert sein (vor Installation der App sicherstellen, siehe unten)
-- Web-Interface: Benutzer und Passwort sind angelegt (vor Installation der App sicherstellen, siehe unten)
+- Web-Interface: Benutzer und Passwort sind angelegt und bekannt (vor Installation der App sicherstellen, siehe unten)
 - Web-Interface: 4-stelliger HEX-Code ist bekannt (vor Installation der App sicherstellen, siehe unten) 
 - Home Assistant  
 - MQTT‑Broker (z. B. Mosquitto)  
@@ -108,15 +108,15 @@ Repository‑URL: https://github.com/tiktak29/Weishaupt_WEM-Lokal_MQTT
 
 | Parameter | Beschreibung |
 |----------|--------------|
-| `webinterface_ip_address` | IP-Adresse Web-Interface |
-| `webinterface_username` | Benutzername |
-| `webinterface_password` | Passwort |
-| `webinterface_hex_code` | HEX‑Code aus der URL Webinterface |
+| `webinterface_ip_address` | Web-Interface IP-Adresse |
+| `webinterface_username` | Web-Interface Benutzername |
+| `webinterface_password` | Web-Interface Passwort |
+| `webinterface_hex_code` | Webinterface HEX‑Code 4-stellig aus der URL |
 | `mqtt_broker` | MQTT‑Broker (z. B. core-mosquitto) |
-| `mqtt_port` | Port |
-| `mqtt_username` | Benutzer |
-| `mqtt_password` | Passwort |
-| `polling_seconds` | Abfrageintervall |
+| `mqtt_port` | MQTT Port |
+| `mqtt_username` | MQTT Benutzername |
+| `mqtt_password` | MQTT Passwort |
+| `polling_seconds` | Abfrageintervall in Sekunden |
 | `enable_wp` | Wärmepumpe |
 | `enable_hk1` | Heizkreis 1 |
 | `enable_hk2` | Heizkreis 2 |
@@ -142,17 +142,18 @@ Daher wird empfohlen, während des Betriebs der App keine zusätzlichen Browserz
 ## 1. Web-Interface aktivieren
 [Anleitung im Home Assistant Community Forum](https://community.home-assistant.io/t/weishaupt-heatpump-integration-via-modbus/436823/210?page=13)
 <br><br>
-## 2. Web-Interface Benutzer und Kennwort anlegen
-Lokale IP (Beispiel: http://192.168.178.xx) der Wärmepumpe im Browser aufrufen, Benutzer anlegen und Passwort vergeben
+## 2. Web-Interface Benutzer und Passwort anlegen
+Lokale IP (Beispiel: http://192.168.178.xx) der Wärmepumpe im Browser aufrufen, Benutzername anlegen und Passwort vergeben.
+Benutzername und Passwort werden in der App-Konfiguration als Web-Interface Benutzername und  Web-Interface Passwort benötigt.
 <br><br>
 ## 3. Web-Interface 4-stellige HEX-Zahl ermitteln
 Benutzeroberfläche vom Web-Interface im Browser öffnen.  
-Auswählen: Profimodus → Info → Heizkreis 1
+Auswählen: Profimodus → Info → Heizkreis 1  
 Oben im Browser wird die URL angezeigt.  
-Beispiel: http://192.168.178.89/settings_export.html?stack=0C00000100000000008000HHHH010002000301,0C000C1900000000000000HHHH020003000401  
-Im ersten und zweiten Block HHHH ist der 4-stellige HEX-Code.  
+http://192.168.178.xx/settings_export.html?stack=0C00000100000000008000????010002000301,0C000C1900000000000000????020003000401  
+Im ersten und zweiten Block ???? ist der 4-stellige HEX-Code.  
 
-Der 4-stellige HEX-Code muss in beiden URL-Blöcken identisch sein und wird in der App-Konfiguration als webinterface_hex_code eingetragen.
+Der 4-stellige HEX-Code muss in beiden URL-Blöcken identisch sein und wird in der App-Konfiguration als webinterface_hex_code benötigt.
 
 ![HEX-Code Beispiel](images/hex-code-example.jpg)
 
