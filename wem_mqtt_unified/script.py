@@ -16,7 +16,7 @@ import logging
 login_start_time = time.time()
 app_start_time = time.time()
 
-# Discovery-Steuerung
+# Discovery control
 discovery_enabled = True
 device_ready = {}
 
@@ -26,13 +26,13 @@ def all_devices_ready():
 def log_missing_devices():
     missing = [name for name, ready in device_ready.items() if not ready]
     if missing:
-        logger.info(f" Warte auf erste Daten von: {', '.join(missing)}")
+        logger.info(f" Waiting for first data from: {', '.join(missing)}")
 
 def log_device_ready(name):
-    logger.info(f"✅ {name} bereit – erste Daten erfolgreich empfangen")
+    logger.info(f"✅ {name} ready – first data successfully received")
 
 def log_summary_after_discovery(data_store):
-    logger.info("📋 Zusammenfassung aller Geräte:")
+    logger.info("📋 Summary of all devices:")
 
     wp_model = (
         data_store.get("Wärmepumpe", {})
@@ -41,14 +41,14 @@ def log_summary_after_discovery(data_store):
     )
 
     if wp_model:
-        logger.info(f"⚙️ Erkanntes Modell: {wp_model}")
+        logger.info(f"⚙️ Detected model: {wp_model}")
 
     for name, ready in device_ready.items():
-        status = "✅ Daten empfangen" if ready else "⏳ Keine Daten"
+        status = "✅ Data received" if ready else "⏳ No data"
         logger.info(f"{status}  – {name}")
 
 # ---------------------------
-# KONFIGURATION
+# CONFIGURATION
 # ---------------------------
 
 with open("/data/options.json") as f:
@@ -66,13 +66,13 @@ ENABLE_STATS = config.get("enable_stats", True)
 ENABLE_WEZ2 = config.get("enable_wez2", True)
 
 if not IP:
-    raise ValueError("webinterface_ip_address fehlt")
+    raise ValueError("webinterface_ip_address missing")
 if not USERNAME:
-    raise ValueError("webinterface_username fehlt")
+    raise ValueError("webinterface_username missing")
 if not PASSWORD:
-    raise ValueError("webinterface_password fehlt")
+    raise ValueError("webinterface_password missing")
 if not HEX:
-    raise ValueError("webinterface_hex_code fehlt")
+    raise ValueError("webinterface_hex_code missing")
 
 BASE_URL = f"http://{IP}"
 
@@ -95,7 +95,7 @@ if ENABLE_STATS: URLS["Statistik"] = all_urls["Statistik"]
 if ENABLE_WEZ2: URLS["2. WEZ"] = all_urls["2. WEZ"]
 
 if not URLS:
-    raise ValueError("Mindestens ein Gerät muss aktiviert sein.")
+    raise ValueError("At least one device must be enabled.")
 
 device_ready = {name: False for name in URLS.keys()}
 
@@ -109,7 +109,7 @@ BASE_SEQUENCE = [
 SEQUENCE = [device for device in BASE_SEQUENCE if device in URLS]
 
 # ---------------------------
-# STATISTIK
+# STATISTICS
 # ---------------------------
 
 stats = {
@@ -165,23 +165,23 @@ def on_connect(client, userdata, flags, rc, properties=None):
     - API v2: on_connect(client, userdata, flags, reason_code, properties)
     """
     if rc == 0:
-        logger.info(" MQTT verbunden")
+        logger.info(" MQTT connected")
         client.publish(
             MQTT_STATE_TOPIC,
             json.dumps({"status": "connected"}),
             retain=True
         )
     else:
-        logger.error(f"❌ MQTT-Verbindung fehlgeschlagen (rc={rc})")
+        logger.error(f"❌  MQTT connection failed (rc={rc})")
 
 def on_disconnect(client, userdata, rc, properties=None):
     if rc == 0:
-        logger.info("🔌 MQTT sauber getrennt")
+        logger.info("🔌 MQTT disconnected cleanly")
     else:
-        logger.warning(f"⚠️ MQTT unerwartet getrennt (rc={rc})")
+        logger.warning(f"⚠️ MQTT disconnected unexpectedly (rc={rc})")
 
 # ---------------------------
-# MQTT CLIENT (ohne API-Version erzwingen)
+# MQTT CLIENT (without forcing API version)
 # ---------------------------
 
 # MQTT-Client mit Fallback für alte paho-mqtt Versionen
@@ -203,9 +203,9 @@ mqtt_client.on_disconnect = on_disconnect
 try:
     mqtt_client.connect(MQTT_BROKER, MQTT_PORT, 60)
 except Exception as e:
-    logger.error("❌ MQTT-Verbindung fehlgeschlagen – Keine Verbindung zum MQTT-Broker möglich")
-    logger.error(f"🔧 Technische Info: {e}")
-    logger.error("🛑 App wurde gestoppt.")
+    logger.error("❌ MQTT connection failed – unable to connect to MQTT broker")
+    logger.error(f"🔧 Technical info: {e}")
+    logger.error("🛑 App has been stopped.")
     while True:
         time.sleep(3600)
 
@@ -222,7 +222,7 @@ while time.time() - mqtt_check_start < 3:
     time.sleep(0.1)
 
 if not mqtt_login_ok:
-    logger.error("❌ MQTT-Login fehlgeschlagen – Broker hat Anmeldung abgelehnt")
+    logger.error("❌ MQTT login failed – broker rejected authentication")
     mqtt_client.loop_stop()
     mqtt_client.disconnect()
     while True:
@@ -262,7 +262,7 @@ def is_wrong_section(section, values):
     return False
 
 # ---------------------------
-# ROBUSTES HTTP WRAPPING
+# ROBUST HTTP WRAPPING
 # ---------------------------
 
 async def safe_request(session, method, url, **kwargs):
@@ -273,17 +273,17 @@ async def safe_request(session, method, url, **kwargs):
 
     except ClientConnectorError:
         if url != "/index.html":
-            logger.error(f"❌ Verbindungsfehler zu WEM-Lokal ({url})")
+            logger.error(f"❌ Connection error to WEM-Local ({url})")
         return None, None
 
     except asyncio.TimeoutError:
         if url != "/index.html":
-            logger.error(f"❌ Timeout bei Request zu WEM-Lokal ({url})")
+            logger.error(f"❌ Timeout during request to WEM-Local ({url})")
         return None, None
 
     except Exception as e:
         if url != "/index.html":
-            logger.error(f"❌ Unerwarteter Fehler bei Request ({url}): {e}")
+            logger.error(f"❌ Unexpected error during request ({url}): {e}")
         return None, None
 
 # ---------------------------
@@ -296,7 +296,7 @@ async def login(session):
 
     resp, _ = await safe_request(session, "GET", "/index.html")
     if resp is None:
-        logger.warning("⚠️ /index.html nicht erreichbar – Login abgebrochen")
+        logger.warning("⚠️ /index.html not reachable – login aborted")
         return False
 
     payload = urlencode({"user": USERNAME, "pass": PASSWORD})
@@ -311,7 +311,7 @@ async def login(session):
     )
 
     if resp is None:
-        logger.warning("⚠️ Login-Request fehlgeschlagen (keine Antwort)")
+        logger.warning("⚠️ Login request failed (no response)")
         return False
 
     return resp.status == 303
@@ -371,13 +371,13 @@ async def fetch(session, name, url):
     resp, html = await safe_request(session, "GET", url, headers=HEADERS)
 
     if resp is None or html is None:
-        logger.warning(f"⚠️ Keine Antwort von WEM-Lokal ({name})")
+        logger.warning(f"⚠️ No response from WEM‑Local ({name})")
         stats[name]["failed"] += 1
         return None
 
     if "form-signin" in html.lower() or "bitte anmelden" in html.lower():
         if time.time() - login_start_time > 300:
-            logger.error("❌ Login fehlgeschlagen – falscher Benutzername oder Passwort")
+            logger.error("❌ Login failed – incorrect username or password")
         stats[name]["failed"] += 1
         return None
 
@@ -490,7 +490,7 @@ def publish_discovery(data_store):
             }
 
             # ---------------------------
-            # SPEZIALFÄLLE
+            # Special cases
             # ---------------------------
 
             if "leistungsanforderung" in key_lower:
@@ -591,7 +591,7 @@ def publish_discovery(data_store):
             mqtt_publish(disc_topic, payload, retain=True)
 
 # ---------------------------
-# STATISTIK-AUSGABE
+# STATISTICS OUTPUT
 # ---------------------------
 
 def output_statistics():
@@ -624,10 +624,10 @@ def output_statistics():
         total_pct = ((first + retry) / total) * 100
 
         logger.info(f"{device}:")
-        logger.info(f"  Erstabfrage erfolgreich: {first_pct:.1f} % ({first})")
-        logger.info(f"  Retry erfolgreich:      {retry_pct:.1f} % ({retry})")
-        logger.info(f"  Endgültig fehlgeschl.: {failed_pct:.1f} % ({failed})")
-        logger.info(f"  Gesamt erfolgreich:    {total_pct:.1f} % ({first + retry} von {total})")
+        logger.info(f"  First request successful: {first_pct:.1f} % ({first})")
+        logger.info(f"  Retry successful:      {retry_pct:.1f} % ({retry})")
+        logger.info(f"  Final failures: {failed_pct:.1f} % ({failed})")
+        logger.info(f"  Total successful:    {total_pct:.1f} % ({first + retry} of {total})")
 
         system_total += total
         system_first += first
@@ -641,11 +641,11 @@ def output_statistics():
         system_failed_pct = (system_failed / system_total) * 100
         system_total_pct = ((system_first + system_retry) / system_total) * 100
 
-        logger.info("SYSTEM GESAMT:")
-        logger.info(f"  Erstabfrage erfolgreich: {system_first_pct:.1f} % ({system_first})")
-        logger.info(f"  Retry erfolgreich:      {system_retry_pct:.1f} % ({system_retry})")
-        logger.info(f"  Endgültig fehlgeschl.: {system_failed_pct:.1f} % ({system_failed})")
-        logger.info(f"  Gesamt erfolgreich:    {system_total_pct:.1f} % ({system_first + system_retry} von {system_total})")
+        logger.info("SYSTEM TOTAL:")
+        logger.info(f"  First request successful: {system_first_pct:.1f} % ({system_first})")
+        logger.info(f"  Retry successful:      {system_retry_pct:.1f} % ({system_retry})")
+        logger.info(f"  Final failures: {system_failed_pct:.1f} % ({system_failed})")
+        logger.info(f"  Total successful:    {system_total_pct:.1f} % ({system_first + system_retry} of {system_total})")
 
     for device in stats:
         stats[device] = {
@@ -672,24 +672,24 @@ async def main():
 
         data_store = {key: {} for key in URLS.keys()}
 
-        logger.info("📡 Discovery ist aktiv, bis alle Geräte mindestens einmal Daten geliefert haben...")
+        logger.info("📡 Discovery is active until all devices have delivered data at least once...")
         log_missing_devices()
 
-        logger.info("⏳ Hintergrundanmeldung läuft (vollständige Stabilisierung kann bis zu 5 Minuten dauern)")
+        logger.info("⏳ Background login in progress (full stabilization may take up to 5 minutes)")
 
         resp, _ = await safe_request(session, "GET", "/index.html")
 
         if resp is None:
-            logger.error("❌ Web-Interface nicht erreichbar")
-            logger.error(f"🔧 Technische Info: IP {IP} konnte nicht kontaktiert werden")
-            logger.error("🛑 App wurde gestoppt.")
+            logger.error("❌ Web interface not reachable")
+            logger.error(f"🔧 Technical info: IP {IP} could not be contacted")
+            logger.error("🛑 App has been stopped.")
             while True:
                 await asyncio.sleep(3600)
 
         while True:
 
             if not await login(session):
-                logger.warning("⚠️ Login fehlgeschlagen – neuer Versuch in 10s")
+                logger.warning("⚠️ Login failed – retrying in 10s")
                 await asyncio.sleep(10)
                 continue
 
@@ -751,14 +751,14 @@ async def main():
                         publish_discovery(data_store)
 
                         if all_devices_ready():
-                            logger.info(" Alle Geräte haben Daten geliefert – Discovery wird deaktiviert")
+                            logger.info(" All devices have delivered data – discovery will be disabled")
                             log_summary_after_discovery(data_store)
-                            logger.info("🕒 Tagesstatistik der Datenabfrage wird täglich um 00:00 Uhr erzeugt")
+                            logger.info("🕒 Daily statistics of data polling will be generated at 00:00")
                             discovery_enabled = False
 
                     weekday_short = {
-                        0: "Mo", 1: "Di", 2: "Mi", 3: "Do",
-                        4: "Fr", 5: "Sa", 6: "So"
+                        0: "Mon", 1: "Tue", 2: "Wed", 3: "Thu",
+                        4: "Fri", 5: "Sat", 6: "Sun"
                     }
 
                     now = time.localtime()
@@ -770,11 +770,11 @@ async def main():
                         weekday_str = weekday_short[stats_day.tm_wday]
                         date_str = time.strftime("%d.%m.%Y", stats_day)
 
-                        logger.info(f"🕒 Tagesstatistik für {weekday_str}, {date_str} wird erstellt")
+                        logger.info(f"🕒 Creating daily statistics for {weekday_str}, {date_str}")
 
                         output_statistics()
 
-                        logger.info(f"🕒 Tagesstatistik für {weekday_str}, {date_str} wurde erstellt")
+                        logger.info(f"🕒 Daily statistics for {weekday_str}, {date_str} has been created")
 
                         await asyncio.sleep(60)
 
