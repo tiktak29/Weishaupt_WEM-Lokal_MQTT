@@ -1,5 +1,5 @@
 <p align="center" style="padding-top: 40px;">
-  <img src="wem_mqtt_unified/logo.png" alt="WEM Lokal MQTT Logo" style="max-width: 450px; width: 20%; height: auto;">
+  <img src="wem_mqtt_unified/logo.png" alt="WEM Lokal MQTT Logo" style="max-width: 450px; width: 25%; height: auto;">
 </p>
 
 # Weishaupt WEM‑Lokal → MQTT  
