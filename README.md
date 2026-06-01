@@ -35,7 +35,7 @@ Entwickelt, um Weishaupt Systeme ohne offiziellen API-Zugang in moderne Home Ass
 - Weishaupt Wärmepumpe mit aktueller Software
 - Web-Interface: Webserver muss in der Regelung aktiviert sein (vor Installation der App sicherstellen, siehe unten)
 - Web-Interface: Benutzer und Passwort sind angelegt (vor Installation der App sicherstellen, siehe unten)
-- Web-Interface: 4-stelliger HEX-Code ist bekannt (vor Installation der sicherstellen, siehe unten) 
+- Web-Interface: 4-stelliger HEX-Code ist bekannt (vor Installation der App sicherstellen, siehe unten) 
 - Home Assistant  
 - MQTT‑Broker (z. B. Mosquitto)  
 
