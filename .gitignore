@@ -1,0 +1,40 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.eggs/
+*.egg-info/
+dist/
+build/
+
+# Virtual environments
+venv/
+env/
+.venv/
+
+# Home Assistant Add-on runtime data
+data/
+options.json
+*.db
+*.db-shm
+*.db-wal
+*.log
+
+# Docker build cache
+*.tar
+*.img
+*.layer
+
+# IDE / Editor
+.vscode/
+.idea/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Backup files
+*.bak
+*.old
+*.tmp
