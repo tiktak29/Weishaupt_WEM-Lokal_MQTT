@@ -189,6 +189,7 @@ This project is an independent open‑source project and is not affiliated with 
 
 The app was developed in spare time based on publicly available information.  
 Use at your own risk and responsibility.  
+
 The developers assume no liability for any damage or malfunction caused by the use of this app.
 
 ---
