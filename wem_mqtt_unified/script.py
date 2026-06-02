@@ -165,7 +165,7 @@ def on_connect(client, userdata, flags, rc, properties=None):
     - API v2: on_connect(client, userdata, flags, reason_code, properties)
     """
     if rc == 0:
-        logger.info(" MQTT connected")
+        logger.info("✅ MQTT connected")
         client.publish(
             MQTT_STATE_TOPIC,
             json.dumps({"status": "connected"}),
@@ -181,17 +181,16 @@ def on_disconnect(client, userdata, rc, properties=None):
         logger.warning(f"⚠️ MQTT disconnected unexpectedly (rc={rc})")
 
 # ---------------------------
-# MQTT CLIENT (without forcing API version)
+# MQTT client with fallback for older paho-mqtt versions
 # ---------------------------
 
-# MQTT-Client mit Fallback für alte paho-mqtt Versionen
 try:
     mqtt_client = mqtt.Client(
         protocol=mqtt.MQTTv311,
         callback_api_version=mqtt.CallbackAPIVersion.VERSION2
     )
 except TypeError:
-    # Fallback für alte paho-mqtt Versionen ohne callback_api_version
+    # Fallback for older paho-mqtt versions without callback_api_version
     mqtt_client = mqtt.Client(protocol=mqtt.MQTTv311)
 
 if MQTT_USER:
@@ -211,7 +210,7 @@ except Exception as e:
 
 mqtt_client.loop_start()
 
-# Kurzer Verbindungscheck
+# Connection check
 mqtt_login_ok = False
 mqtt_check_start = time.time()
 
@@ -234,7 +233,7 @@ def mqtt_publish(topic, payload, retain=True):
     mqtt_client.publish(topic, payload, retain=retain)
 
 # ---------------------------
-# HILFSFUNKTIONEN
+# HELPER FUNCTIONS
 # ---------------------------
 
 def normalize_id(text):
@@ -247,7 +246,7 @@ def normalize_id(text):
         .replace("/", "_")
     )
 # ---------------------------
-# WP-SIGNATUR
+# HEAT PUMP SIGNATURE
 # ---------------------------
 
 WP_SIGNATURE = ["Verdichter", "Hochdruck", "Niederdruck"]
@@ -751,7 +750,7 @@ async def main():
                         publish_discovery(data_store)
 
                         if all_devices_ready():
-                            logger.info(" All devices have delivered data – discovery will be disabled")
+                            logger.info("✅ All devices have delivered data – discovery will be disabled")
                             log_summary_after_discovery(data_store)
                             logger.info("🕒 Daily statistics of data polling will be generated at 00:00")
                             discovery_enabled = False
@@ -774,7 +773,7 @@ async def main():
 
                         output_statistics()
 
-                        logger.info(f"🕒 Daily statistics for {weekday_str}, {date_str} has been created")
+                        logger.info(f"🕒 Daily statistics generated for {weekday_str}, {date_str}")
 
                         await asyncio.sleep(60)
 
@@ -789,4 +788,3 @@ async def main():
 
 if __name__ == "__main__":
     asyncio.run(main())
-
