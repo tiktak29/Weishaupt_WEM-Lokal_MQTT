@@ -9,7 +9,7 @@
 ![MQTT](https://img.shields.io/badge/MQTT-Discovery-orange)
 ![License](https://img.shields.io/badge/license-MIT-brightgreen)  
 
-Local data extraction from Weishaupt heat pumps via the integrated Weishaupt controller web interface, with MQTT integration and full Home Assistant Discovery – completely cloud‑free.
+Local data extraction from Weishaupt heat pumps via the integrated Weishaupt controller web interface, with MQTT integration and full Home Assistant Discovery – fully local and cloud‑free.
 
 #### Tested with a Weishaupt WAB 14 (EC WAB V5.3 R10 / WWP‑SG V5.0)
 
@@ -19,15 +19,15 @@ Local data extraction from Weishaupt heat pumps via the integrated Weishaupt con
 This integration acts as a local polling gateway that reads data from the Weishaupt WEM web interface and publishes it to Home Assistant via MQTT Discovery.  
 All devices and sensors are automatically created in Home Assistant through **MQTT Discovery**.
 <br>
-#### Weishaupt Web UI → HTTP scraping → Python gateway → data normalization → MQTT broker → Discovery → Home Assistant  
+#### Weishaupt Web UI → HTTP scraping → Python gateway → data normalization → MQTT → Home Assistant Discovery  
 Developed to integrate Weishaupt systems into modern Home Assistant environments without requiring any official API access.
 
 ---
 
-✔ No cloud  
-✔ No API keys  
-✔ No dependency on Weishaupt servers  
-✔ 100% local operation
+- Fully local communication  
+- No cloud services involved  
+- No external APIs or accounts required  
+- Operates solely via the local Weishaupt web interface
 
 ---
 
@@ -39,6 +39,9 @@ Developed to integrate Weishaupt systems into modern Home Assistant environments
 - Home Assistant  
 - MQTT broker (e.g., Mosquitto)  
 
+<sub>Note: Additional information regarding the web interface is provided in the lower section of this document.</sub>
+
+
 ---
 
 ## Features
@@ -46,7 +49,6 @@ Developed to integrate Weishaupt systems into modern Home Assistant environments
 ### Local Communication
 - Direct access to the Weishaupt controller via the integrated web interface  
 - No cloud connection required  
-- No API keys or manufacturer accounts needed  
 - No internet connection required for operation  
 - Direct communication within the local network  
 
@@ -76,7 +78,8 @@ Developed to integrate Weishaupt systems into modern Home Assistant environments
 - Dynamic activation of individual device sections  
 - Daily communication and success statistics in the log  
 - Optional MQTT availability / last‑will status (online/offline)  
-- Fully local operation without external dependencies  
+- Fully local operation without external dependencies
+  
 
 ![Dashboard](images/dashboard.jpg)
 
@@ -107,9 +110,9 @@ https://github.com/tiktak29/Weishaupt_WEM-Lokal_MQTT
 
 | Parameter | Description |
 |----------|-------------|
-| `webinterface_ip_address` | Web interface IP address |
-| `webinterface_username` | Web interface username |
-| `webinterface_password` | Web interface password |
+| `webinterface_ip_address` | web interface IP address |
+| `webinterface_username` | web interface username |
+| `webinterface_password` | web interface password |
 | `webinterface_hex_code` | 4‑digit HEX code from the URL |
 | `mqtt_broker` | MQTT broker (e.g., core‑mosquitto) |
 | `mqtt_port` | MQTT port |
