@@ -2,7 +2,7 @@
   <img src="wem_mqtt_unified/logo.png" alt="WEM Lokal MQTT Logo" style="max-width: 450px; width: 25%; height: auto;">
 </p>
 
-# Weishaupt WEM‑Local → MQTT  
+# Weishaupt WEM‑Lokal → MQTT  
 
 ![Version](https://img.shields.io/badge/version-v1.0.0-blue)
 ![Home Assistant](https://img.shields.io/badge/Home%20Assistant-App-green)
