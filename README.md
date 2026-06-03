@@ -127,7 +127,16 @@ https://github.com/tiktak29/Weishaupt_WEM-Lokal_MQTT
 
 ![Configuration 1](images/config-1.jpg)  
 ![Configuration 2](images/config-2.jpg)
+
+---
+## Startup Log
 ![Startup Log](images/startup-log.jpg)
+
+---
+
+## Daily Statistics Log
+
+![daily-statistics-log](images/daily-statistics-log.jpg)
 
 ---
 
