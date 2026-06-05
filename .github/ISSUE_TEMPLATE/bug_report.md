@@ -1,6 +1,6 @@
 ---
 name: Bug report
-about: Use this template to report issues related to Web-IF behavior, MQTT data, or
+about: Use this template to report issues related to web-if behavior, MQTT data, or
   repository functionality.
 title: "[BUG] Short description of the issue"
 labels: bug
