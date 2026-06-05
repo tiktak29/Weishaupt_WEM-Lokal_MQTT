@@ -1,7 +1,7 @@
 ---
 name: Compatibility Report
 about: Use this template to report compatibility details for your heat pump model,
-  firmware, and Web-IF version.
+  firmware, and web-if version.
 title: "[Compatibility] Device / Firmware report"
 labels: question
 assignees: ''
