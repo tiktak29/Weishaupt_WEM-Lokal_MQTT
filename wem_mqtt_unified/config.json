@@ -2,7 +2,7 @@
   "name": "Weishaupt WEM-Lokal MQTT",
   "version": "1.0.0",
   "slug": "wem_mqtt_unified",
-  "description": "Local integration for the Weishaupt WEM web interface via MQTT.",
+  "description": "Local integration for the Weishaupt WEM web interface via MQTT",
   "url": "https://github.com/tiktak29/Weishaupt_WEM-Lokal_MQTT",
   "startup": "services",
   "boot": "auto",
