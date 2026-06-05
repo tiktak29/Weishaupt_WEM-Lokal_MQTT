@@ -11,6 +11,14 @@
 
 Local data extraction from Weishaupt heat pumps via the integrated Weishaupt controller web interface, with MQTT integration and full Home Assistant Discovery – fully local and cloud‑free.
 
+---
+
+## Feedback & Compatibility Reports
+
+To help improve compatibility across different Weishaupt WEM configurations, please share your setup and results in the discussion thread:
+
+➡️ **[Feedback: Tested WEM-Lokal Heat Pump Configurations](https://github.com/tiktak29/Weishaupt_WEM-Lokal_MQTT/discussions/1)**
+
 #### Tested with a Weishaupt WAB 14 (EC WAB V5.3 R10 / WWP‑SG V5.0)
 
 ---
