@@ -24,7 +24,8 @@ To help improve compatibility across different Weishaupt WEM configurations, ple
 ---
 
 ## Overview
-This integration acts as a local polling gateway that reads data from the Weishaupt WEM web interface and publishes it to Home Assistant via MQTT Discovery.  
+This integration acts as a local polling gateway that reads data from the Weishaupt WEM web interface and publishes it to Home Assistant via MQTT Discovery.
+
 All devices and sensors are automatically created in Home Assistant through **MQTT Discovery**.
 <br>
 #### Weishaupt Web UI → HTTP scraping → Python gateway → data normalization → MQTT → Home Assistant Discovery  
@@ -41,9 +42,9 @@ Developed to integrate Weishaupt systems into modern Home Assistant environments
 
 ## Requirements
 - Weishaupt heat pump with up‑to‑date firmware  
-- Web interface: Webserver must be enabled on the controller (ensure before installing the app)  
-- Web interface: Username and password must be created and known (ensure before installing the app)  
-- Web interface: 4‑digit HEX code must be known (ensure before installing the app)  
+- Web interface: Webserver must be enabled on the controller (ensure before installing the app)
+- Web interface: Username and password must be created and known (ensure before installing the app)
+- Web interface: 4‑digit HEX code must be known (ensure before installing the app)
 - Home Assistant  
 - MQTT broker (e.g., Mosquitto)  
 
@@ -178,26 +179,28 @@ Therefore, it is recommended to avoid additional browser access to the web inter
 ---
 
 ## 1. Enable the web interface
-💡 [Instructions in the Home Assistant Community Forum](https://community.home-assistant.io/t/weishaupt-heatpump-integration-via-modbus/436823/210?page=13)
+- The following link provides a detailed guide on how to enable the web interface in the Weishaupt controller.  
+  💡 [Instructions in the Home Assistant Community Forum](https://community.home-assistant.io/t/weishaupt-heatpump-integration-via-modbus/436823/210?page=13)
 <br><br>
 
 ## 2. Create web interface username and password
-Open the local IP address of the heat pump in your browser (e.g., http://192.168.178.xx), create a username and set a password.  
-These credentials are required in the app configuration as the web interface username and password.
+- Open the local IP address of the heat pump in your browser (e.g., http://192.168.178.xx), create a username and set a password.
+- These credentials are required in the app configuration as the web interface username and password.
 <br><br>
 
 ## 3. Determine the 4‑digit HEX code
-Open the web interface in your browser.  
-Navigate to: Expert Mode → Info → Heating Circuit 1  
-The browser will show a URL similar to:
-http://192.168.178.xx/settings_export.html?stack=0C00000100000000008000????010002000301,0C000C1900000000000000????020003000401  
-The `????` in both blocks represent the 4‑digit HEX code.
+- Open the web interface in your browser.
+- Navigate to: Expert Mode → Info → Heating Circuit 1  
+- The browser will show a URL similar to:  
+  `http://192.168.178.xx/settings_export.html?stack=0C00000100000000008000????010002000301,0C000C1900000000000000????020003000401`
+- The `????` in both blocks represent the 4‑digit HEX code.
 
 The HEX code must be identical in both URL blocks and is required in the app configuration as `webinterface_hex_code`.
 
 ![HEX Code Example](images/hex-code-example.jpg)
 
 ---
+
 
 ## Changelog
 
