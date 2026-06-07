@@ -178,7 +178,7 @@ Therefore, it is recommended to avoid additional browser access to the web inter
 ---
 
 ## 1. Enable the web interface
-[Instructions in the Home Assistant Community Forum](https://community.home-assistant.io/t/weishaupt-heatpump-integration-via-modbus/436823/210?page=13)
+💡 [Instructions in the Home Assistant Community Forum](https://community.home-assistant.io/t/weishaupt-heatpump-integration-via-modbus/436823/210?page=13)
 <br><br>
 
 ## 2. Create web interface username and password
