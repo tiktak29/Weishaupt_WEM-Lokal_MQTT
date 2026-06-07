@@ -47,7 +47,7 @@ Developed to integrate Weishaupt systems into modern Home Assistant environments
 - Home Assistant  
 - MQTT broker (e.g., Mosquitto)  
 
-<sub>Note: Additional information regarding the web interface is provided in the lower section of this document.</sub>
+<sub>💡 <a href="#important-notice">Note: Additional information regarding the web interface is provided in the lower section of this document.</a></sub>
 
 
 ---
@@ -81,13 +81,23 @@ Developed to integrate Weishaupt systems into modern Home Assistant environments
 - Automatic recovery after communication failures  
 - Round‑robin polling to reduce load on the web interface  
 
+### Communication Quality Monitoring
+- Long-term monitoring of the web interface reliability  
+- Included in the daily statistics log
+- Tracks:
+  - First-request success rate  
+  - Retry success rate  
+  - Final failures  
+  - Daily communication statistics 
+
 ### Advanced Features
 - Automatic heat pump model detection  
-- Dynamic activation of individual device sections  
-- Daily communication and success statistics in the log  
-- Optional MQTT availability / last‑will status (online/offline)  
+- Dynamic activation of individual device sections   
+- MQTT connection status monitoring  
+- Extended diagnostic information for improved troubleshooting  
 - Fully local operation without external dependencies
-  
+
+<br>
 
 ![Dashboard](images/dashboard.jpg)
 
@@ -138,11 +148,18 @@ https://github.com/tiktak29/Weishaupt_WEM-Lokal_MQTT
 
 ---
 ## Startup Log
+The startup log documents the initialization sequence, background login, device discovery, and readiness of all components.
+
+<br>
+
 ![Startup Log](images/startup-log.jpg)
 
 ---
 
 ## Daily Statistics Log
+The daily statistics provide insight into communication quality and reliability, including first-request success rates, retry success rates, and final failures.
+
+<br>
 
 ![daily-statistics-log](images/daily-statistics-log.jpg)
 
