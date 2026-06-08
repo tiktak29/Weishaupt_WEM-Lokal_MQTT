@@ -168,13 +168,18 @@ The daily statistics provide insight into communication quality and reliability,
 
 ## Important Notice
 
-⚠️ While the app is running, you should not access the web interface of the heat pump via a browser at the same time.
+⚠️ While the app is running, you should not access the heat pump's local web interface through a browser at the same time.  
+This applies only to the local web interface of the device itself and does not affect access to the cloud portal.
 
-Parallel data requests may cause the web interface of the heat pump to become unstable.
+Parallel data requests may cause the heat pump's web interface to become unstable.
 
-In rare cases, this may lead to the controller becoming unresponsive, requiring a restart of the heat pump controller before it becomes operational and reachable again.
+In rare cases, this may cause the controller to become unresponsive, requiring the heat pump controller to be restarted before communication can be restored.
 
-Therefore, it is recommended to avoid additional browser access to the web interface while the app is running.
+Therefore, it is recommended to avoid additional browser access to the local web interface while the app is running.
+
+### ✅ Cloud Access Unaffected
+
+The official Weishaupt WEM portal can still be used without restrictions.
 
 ---
 
