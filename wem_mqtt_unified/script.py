@@ -736,7 +736,7 @@ async def main():
                 await asyncio.sleep(10)
                 continue
 
-            await asyncio.sleep(5.0)
+            await asyncio.sleep(1.5)
 
             while True:
 
