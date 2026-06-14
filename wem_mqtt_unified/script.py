@@ -78,12 +78,20 @@ if not HEX:
 BASE_URL = f"http://{IP}"
 
 def build_urls(hex_code):
+    info = f"0C00000100000000008000{hex_code}010002000301"
+
+    stacks = {
+    
+        "Wärmepumpe": f"0C000C2200000000000000{hex_code}020003000401",
+        "Heizkreis 1": f"0C000C1900000000000000{hex_code}020003000401",
+        "Heizkreis 2": f"0C000C1A00000000000000{hex_code}020003000401",
+        "Statistik":   f"0C000C2700000000000000{hex_code}020003000401",
+        "2. WEZ":      f"0C000C2300000000000000{hex_code}020003000401",
+    }
+
     return {
-        "Wärmepumpe": f"/settings_export.html?stack=0C00000100000000008000{hex_code}010002000301,0C000C2200000000000000{hex_code}020003000401",
-        "Heizkreis 1": f"/settings_export.html?stack=0C00000100000000008000{hex_code}010002000301,0C000C1900000000000000{hex_code}020003000401",
-        "Heizkreis 2": f"/settings_export.html?stack=0C00000100000000008000{hex_code}010002000301,0C000C1A00000000000000{hex_code}020003000401",
-        "Statistik":   f"/settings_export.html?stack=0C00000100000000008000{hex_code}010002000301,0C000C2700000000000000{hex_code}020003000401",
-        "2. WEZ":      f"/settings_export.html?stack=0C00000100000000008000{hex_code}010002000301,0C000C2300000000000000{hex_code}020003000401"
+        name: f"/settings_export.html?stack={info},{stack}"
+        for name, stack in stacks.items()
     }
 
 all_urls = build_urls(HEX)
@@ -383,15 +391,13 @@ async def fetch(session, name, url):
         return None
 
     if "form-signin" in html.lower() or "bitte anmelden" in html.lower():
-        if time.time() - login_start_time > 300:
-            logger.error("❌ Login failed – incorrect username or password")
         stats[name]["failed"] += 1
         return None
 
     values = extract_values(html)
 
     if not values:
-        await asyncio.sleep(2)
+        await asyncio.sleep(1.5)
         resp2, html2 = await safe_request(session, "GET", url, headers=HEADERS)
 
         if resp2 and html2:
@@ -849,4 +855,3 @@ async def main():
 
 if __name__ == "__main__":
     asyncio.run(main())
-
