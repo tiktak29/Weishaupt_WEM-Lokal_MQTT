@@ -9,13 +9,12 @@ import paho.mqtt.client as mqtt
 import unicodedata
 import logging
 from datetime import datetime, timezone
+initial_sync_done = False
+INITIAL_SYNC_ORDER = ["Wärmepumpe", "Heizkreis 1", "Heizkreis 2", "Statistik", "2. WEZ"]
 
 # ---------------------------
 # GLOBALS
 # ---------------------------
-
-login_start_time = time.time()
-app_start_time = time.time()
 
 # Discovery control
 discovery_enabled = True
@@ -158,7 +157,10 @@ MQTT_STATE_TOPIC = "wem/wem_lokal_info"
 AVAILABILITY_TOPIC = "wem/availability"
 LAST_UPDATE_TOPIC = "wem/last_update"
 SYSTEM_STATUS_TOPIC = "wem/system_status"
+DAILY_SUCCESS_TOPIC = "wem/daily_success"
+DAILY_SUCCESS_ATTR_TOPIC = "wem/daily_success_attributes"
 OFFLINE_TIMEOUT = 300
+STATS_FILE = "/data/daily_success.json"
 
 logging.basicConfig(
     level=logging.INFO,
@@ -248,6 +250,24 @@ def mqtt_publish(topic, payload, retain=True):
         payload = json.dumps(payload, ensure_ascii=False)
     mqtt_client.publish(topic, payload, retain=retain)
 
+
+def load_last_daily_stats():
+    try:
+        with open(STATS_FILE, "r") as f:
+            return json.load(f)
+    except Exception:
+        return None
+
+
+def save_daily_stats(data):
+    try:
+        with open(STATS_FILE, "w") as f:
+            json.dump(data, f)
+    except Exception as e:
+        logger.warning(
+            f"⚠️ Unable to save daily statistics: {e}"
+        )
+
 # ---------------------------
 # HELPER FUNCTIONS
 # ---------------------------
@@ -306,8 +326,6 @@ async def safe_request(session, method, url, **kwargs):
 # ---------------------------
 
 async def login(session):
-    global login_start_time
-    login_start_time = time.time()
 
     resp, _ = await safe_request(session, "GET", "/index.html")
     if resp is None:
@@ -429,6 +447,15 @@ def publish_discovery(data_store):
 
     main_device_id = "wem_lokal_info"
 
+    wp_model = (
+        data_store.get("Wärmepumpe", {})
+        .get("Außengerät Variante", "")
+        .strip()
+    )
+
+    if not wp_model:
+        wp_model = "WEM Portal Lokal"
+
     main_device_payload = {
         "name": "Systemstatus",
         "uniq_id": "wem_lokal_info_status",
@@ -442,8 +469,8 @@ def publish_discovery(data_store):
             "identifiers": [main_device_id],
             "name": "WEM-Lokal Info",
             "manufacturer": "Weishaupt",
-            "model": "Web-Interface → MQTT"
-        }
+            "model": wp_model
+        }       
     }
 
     mqtt_publish(
@@ -453,7 +480,7 @@ def publish_discovery(data_store):
     )
 
     last_update_payload = {
-        "name": "Letztes erfolgreiches Update",
+        "name": "Update Sensoren",
         "uniq_id": "wem_lokal_last_update",
 
         "state_topic": LAST_UPDATE_TOPIC,
@@ -468,13 +495,42 @@ def publish_discovery(data_store):
             "identifiers": [main_device_id],
             "name": "WEM-Lokal Info",
             "manufacturer": "Weishaupt",
-            "model": "Web-Interface → MQTT"
+            "model": wp_model
         }
     }
 
     mqtt_publish(
         f"{MQTT_BASE}/sensor/wem_lokal_last_update/config",
         last_update_payload,
+        retain=True
+    )
+
+    success_payload = {
+        "name": "Erfolgsquote",
+        "uniq_id": "wem_daily_success",
+
+        "state_topic": DAILY_SUCCESS_TOPIC,
+
+        "json_attributes_topic": DAILY_SUCCESS_ATTR_TOPIC,
+
+        "unit_of_measurement": "%",
+        "icon": "mdi:chart-line",
+
+        "availability_topic": AVAILABILITY_TOPIC,
+        "payload_available": "online",
+        "payload_not_available": "offline",
+
+        "device": {
+            "identifiers": [main_device_id],
+            "name": "WEM-Lokal Info",
+            "manufacturer": "Weishaupt",
+            "model": wp_model
+        }
+    }
+
+    mqtt_publish(
+        f"{MQTT_BASE}/sensor/wem_daily_success/config",
+        success_payload,
         retain=True
     )
 
@@ -488,15 +544,6 @@ def publish_discovery(data_store):
         "2. WEZ": ("wem_lokal_wez2", "WEM-Lokal 2. WEZ"),
         "Statistik": ("wem_lokal_stats", "WEM-Lokal Statistik"),
     }
-
-    wp_model = (
-        data_store.get("Wärmepumpe", {})
-        .get("Außengerät Variante", "")
-        .strip()
-    )
-
-    if not wp_model:
-        wp_model = "WEM Portal Lokal"
 
     for section, values in data_store.items():
         if not values or section not in device_map:
@@ -562,6 +609,12 @@ def publish_discovery(data_store):
                     payload["value_template"] = value_template.replace("}}", " | replace(' %','') }}")
 
             elif "status" in key_lower and section == "2. WEZ":
+                payload["value_template"] = (
+                    "{% set v = " + value_template.replace("{{", "").replace("}}", "") + " | int %}"
+                    "{{ 'Ein' if v == 1 else 'Aus' }}"
+                )
+
+            elif key_lower == "2. wez" and section == "2. WEZ":
                 payload["value_template"] = (
                     "{% set v = " + value_template.replace("{{", "").replace("}}", "") + " | int %}"
                     "{{ 'Ein' if v == 1 else 'Aus' }}"
@@ -694,6 +747,41 @@ def output_statistics():
         logger.info(f"  Final failures: {system_failed_pct:.1f} % ({system_failed})")
         logger.info(f"  Total successful:    {system_total_pct:.1f} % ({system_first + system_retry} of {system_total})")
 
+        stats_day = time.localtime(time.time() - 86400)
+
+        date_string = (
+            f"{stats_day.tm_mday:02d}."
+            f"{stats_day.tm_mon:02d}."
+            f"{stats_day.tm_year}"
+        )
+
+        mqtt_publish(
+            DAILY_SUCCESS_TOPIC,
+            round(system_total_pct, 1)
+        )
+
+        mqtt_publish(
+            DAILY_SUCCESS_ATTR_TOPIC,
+            {
+                "Datum": date_string,
+                "Abfragen": system_total,
+                "Erfolgreich": system_first + system_retry,
+                "Fehlgeschlagen": system_failed
+            }
+        )
+
+        save_daily_stats(
+            {
+                "success": round(system_total_pct, 1),
+                "attributes": {
+                    "Datum": date_string,
+                    "Abfragen": system_total,
+                    "Erfolgreich": system_first + system_retry,
+                    "Fehlgeschlagen": system_failed
+                }
+            }
+        )
+
     for device in stats:
         stats[device] = {
             "total": 0,
@@ -709,6 +797,7 @@ def output_statistics():
 async def main():
 
     global discovery_enabled
+    global initial_sync_done
 
     jar = aiohttp.CookieJar(unsafe=True)
 
@@ -720,6 +809,25 @@ async def main():
         data_store = {key: {} for key in URLS.keys()}
         last_success = time.time()
         last_status = "offline"
+
+        stored_stats = load_last_daily_stats()
+
+        if stored_stats:
+
+            mqtt_publish(
+                DAILY_SUCCESS_TOPIC,
+                stored_stats["success"]
+            )
+
+            mqtt_publish(
+                DAILY_SUCCESS_ATTR_TOPIC,
+                stored_stats["attributes"]
+            )
+
+            logger.info(
+                f"📊 Restored daily success statistics "
+                f"({stored_stats['attributes'].get('Datum', 'unknown date')})"
+            )
 
         logger.info("📡 Discovery is active until all devices have delivered data at least once...")
         log_missing_devices()
@@ -743,6 +851,100 @@ async def main():
                 continue
 
             await asyncio.sleep(5.0)
+
+            session_broken = False
+            
+            # ---------------------------
+            # WP-FAST-CHECK (Wärmepumpe alle 3 Sekunden bis erste Daten)
+            # ---------------------------
+
+            if not initial_sync_done:
+
+                # Wärmepumpe zuerst im 3-Sekunden-Takt abfragen
+                while True:
+                    values = await fetch(session, "Wärmepumpe", URLS["Wärmepumpe"])
+
+                    if values is None:
+                        session_broken = True
+                        break
+
+                    if values:
+                        data_store["Wärmepumpe"] = values
+                        device_ready["Wärmepumpe"] = True
+                        log_device_ready("Wärmepumpe")
+                        log_missing_devices()
+
+                        mqtt_publish(
+                            LAST_UPDATE_TOPIC,
+                            datetime.fromtimestamp(time.time(), timezone.utc).isoformat()
+                        )
+
+                        clean_data_store = {
+                            section: {
+                                k: str(v).replace(" KW", "").replace(" kW", "").replace(",", ".")
+                                for k, v in vals.items()
+                            }
+                            for section, vals in data_store.items()
+                        }
+
+                        mqtt_publish(
+                            MQTT_STATE_TOPIC,
+                            {"WEM-Lokal Info": clean_data_store}
+                        )
+
+                        break  # WP hat geliefert → Fast-Check beendet
+
+                    await asyncio.sleep(3)  # Fast-Check Intervall
+
+                if session_broken:
+                    continue
+                    
+            # ---------------------------
+            # INITIAL SYNC (optimiert)
+            # ---------------------------
+
+            if not initial_sync_done:
+
+                for dev in INITIAL_SYNC_ORDER:
+                    if dev not in URLS or dev == "Wärmepumpe":
+                        continue
+
+                    values = await fetch(session, dev, URLS[dev])
+
+                    if values is None:
+                        session_broken = True
+                        break
+
+                    if values:
+                        data_store[dev] = values
+                        device_ready[dev] = True
+                        log_device_ready(dev)
+                        log_missing_devices()
+
+                        mqtt_publish(
+                            LAST_UPDATE_TOPIC,
+                            datetime.fromtimestamp(time.time(), timezone.utc).isoformat()
+                        )
+
+                        clean_data_store = {
+                            section: {
+                                k: str(v).replace(" KW", "").replace(" kW", "").replace(",", ".")
+                                for k, v in vals.items()
+                            }
+                            for section, vals in data_store.items()
+                        }
+
+                        mqtt_publish(
+                            MQTT_STATE_TOPIC,
+                            {"WEM-Lokal Info": clean_data_store}
+                        )
+
+                    # Nach WP → alle anderen Geräte im 2-Sekunden-Takt
+                    await asyncio.sleep(2)
+
+                if not session_broken:
+                    initial_sync_done = True
+                    logger.info("✅ Initial Sync abgeschlossen – Wechsel zu Round Robin")
 
             while True:
 
