@@ -26,7 +26,8 @@ def all_devices_ready():
 def log_missing_devices():
     missing = [name for name, ready in device_ready.items() if not ready]
     if missing:
-      # logger.info(f" Waiting for first data from: {', '.join(missing)}")
+        # logger.info(f" Waiting for first data from: {', '.join(missing)}")
+        pass
 
 def log_device_ready(name):
     logger.info(f"✔️ First data received – {name}")
