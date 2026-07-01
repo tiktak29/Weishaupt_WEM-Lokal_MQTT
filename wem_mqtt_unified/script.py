@@ -5,32 +5,37 @@ from bs4 import BeautifulSoup
 from urllib.parse import urlencode
 import json
 import time
+import sys
 import paho.mqtt.client as mqtt
 import unicodedata
 import logging
 from datetime import datetime, timezone
+initial_sync_done = False
+INITIAL_SYNC_ORDER = [
+    "Heizkreis 1",
+    "Heizkreis 2",
+    "Statistik",
+    "2. WEZ"
+]
+
+INITIAL_SYNC_RETRIES = 2
+INITIAL_SYNC_RETRY_DELAY = 2
+login_fail_count = 0
 
 # ---------------------------
 # GLOBALS
 # ---------------------------
 
-login_start_time = time.time()
-app_start_time = time.time()
-
 # Discovery control
 discovery_enabled = True
 device_ready = {}
+last_stats_day = time.localtime().tm_yday
 
 def all_devices_ready():
     return all(device_ready.values())
 
-def log_missing_devices():
-    missing = [name for name, ready in device_ready.items() if not ready]
-    if missing:
-        logger.info(f" Waiting for first data from: {', '.join(missing)}")
-
 def log_device_ready(name):
-    logger.info(f"✅ {name} ready – first data successfully received")
+    logger.info(f"✅ {name:<12} → Initial data received")
 
 def log_summary_after_discovery(data_store):
     logger.info("📋 Summary of all devices:")
@@ -42,11 +47,13 @@ def log_summary_after_discovery(data_store):
     )
 
     if wp_model:
-        logger.info(f"⚙️ Detected model: {wp_model}")
+        logger.info(f"⚙️ Weishaupt {wp_model}")
 
     for name, ready in device_ready.items():
-        status = "✅ Data received" if ready else "⏳ No data"
-        logger.info(f"{status}  – {name}")
+        if ready:
+            logger.info(f"🟢 {name}")
+        else:
+            logger.info(f"🔴 {name}")
 
 # ---------------------------
 # CONFIGURATION
@@ -60,7 +67,6 @@ USERNAME = config.get("webinterface_username", "").strip()
 PASSWORD = config.get("webinterface_password", "").strip()
 HEX = config.get("webinterface_hex_code", "").strip()
 
-ENABLE_WP = config.get("enable_wp", True)
 ENABLE_HK1 = config.get("enable_hk1", True)
 ENABLE_HK2 = config.get("enable_hk2", True)
 ENABLE_STATS = config.get("enable_stats", True)
@@ -96,15 +102,13 @@ def build_urls(hex_code):
 
 all_urls = build_urls(HEX)
 
-URLS = {}
-if ENABLE_WP: URLS["Wärmepumpe"] = all_urls["Wärmepumpe"]
+URLS = {
+    "Wärmepumpe": all_urls["Wärmepumpe"] 
+}
 if ENABLE_HK1: URLS["Heizkreis 1"] = all_urls["Heizkreis 1"]
 if ENABLE_HK2: URLS["Heizkreis 2"] = all_urls["Heizkreis 2"]
 if ENABLE_STATS: URLS["Statistik"] = all_urls["Statistik"]
 if ENABLE_WEZ2: URLS["2. WEZ"] = all_urls["2. WEZ"]
-
-if not URLS:
-    raise ValueError("At least one device must be enabled.")
 
 device_ready = {name: False for name in URLS.keys()}
 
@@ -158,7 +162,10 @@ MQTT_STATE_TOPIC = "wem/wem_lokal_info"
 AVAILABILITY_TOPIC = "wem/availability"
 LAST_UPDATE_TOPIC = "wem/last_update"
 SYSTEM_STATUS_TOPIC = "wem/system_status"
+DAILY_SUCCESS_TOPIC = "wem/daily_success"
+DAILY_SUCCESS_ATTR_TOPIC = "wem/daily_success_attributes"
 OFFLINE_TIMEOUT = 300
+STATS_FILE = "/data/daily_success.json"
 
 logging.basicConfig(
     level=logging.INFO,
@@ -178,7 +185,7 @@ def on_connect(client, userdata, flags, rc, properties=None):
     - API v2: on_connect(client, userdata, flags, reason_code, properties)
     """
     if rc == 0:
-        logger.info("✅ MQTT connected")
+        logger.info("✔️ MQTT connected")
         client.publish(AVAILABILITY_TOPIC, "online", qos=1, retain=True)
     else:
         logger.error(f"❌  MQTT connection failed (rc={rc})")
@@ -220,9 +227,15 @@ try:
 except Exception as e:
     logger.error("❌ MQTT connection failed – unable to connect to MQTT broker")
     logger.error(f"🔧 Technical info: {e}")
-    logger.error("🛑 App has been stopped.")
-    while True:
-        time.sleep(3600)
+    logger.error("🔍 Please check:")
+    logger.error("   • MQTT broker address")
+    logger.error("   • MQTT port")
+    logger.error("   • Whether the MQTT broker is running")
+    logger.error("   • MQTT username and password")
+    logger.error("🛑 App is shutting down")
+    
+    mqtt_client.loop_stop()
+    sys.exit(1)
 
 mqtt_client.loop_start()
 
@@ -238,15 +251,38 @@ while time.time() - mqtt_check_start < 3:
 
 if not mqtt_login_ok:
     logger.error("❌ MQTT login failed – broker rejected authentication")
+    logger.error("🔧 Authentication was rejected by the MQTT broker")
+    logger.error("🔍 Please check:")
+    logger.error("   • MQTT username")
+    logger.error("   • MQTT password")
+    logger.error("   • MQTT access rights")
     mqtt_client.loop_stop()
     mqtt_client.disconnect()
-    while True:
-        time.sleep(3600)
+    logger.error("🛑 App is shutting down.")
+    sys.exit(1)
 
 def mqtt_publish(topic, payload, retain=True):
     if isinstance(payload, (dict, list)):
         payload = json.dumps(payload, ensure_ascii=False)
     mqtt_client.publish(topic, payload, retain=retain)
+
+
+def load_last_daily_stats():
+    try:
+        with open(STATS_FILE, "r") as f:
+            return json.load(f)
+    except Exception:
+        return None
+
+
+def save_daily_stats(data):
+    try:
+        with open(STATS_FILE, "w") as f:
+            json.dump(data, f)
+    except Exception as e:
+        logger.warning(
+            f"⚠️ Unable to save daily statistics: {e}"
+        )
 
 # ---------------------------
 # HELPER FUNCTIONS
@@ -261,6 +297,40 @@ def normalize_id(text):
         .replace(".", "")
         .replace("/", "_")
     )
+
+# ---------------------------
+# CLEAN DATA BUILDER
+# ---------------------------
+
+def build_clean_data(data_store):
+    clean = {}
+
+    for section, vals in data_store.items():
+        clean_vals = {}
+
+        for k, v in vals.items():
+            value = str(v).strip()
+
+            # Ein/Aus → 1/0
+            if value.lower() == "aus":
+                clean_vals[k] = "0"
+
+            elif value.lower() == "ein":
+                clean_vals[k] = "1"
+
+            else:
+                # Allgemeine Bereinigung
+                clean_vals[k] = (
+                    value
+                    .replace(" KW", "")
+                    .replace(" kW", "")
+                    .replace(",", ".")
+                )
+
+        clean[section] = clean_vals
+
+    return clean
+
 # ---------------------------
 # HEAT PUMP SIGNATURE
 # ---------------------------
@@ -306,8 +376,6 @@ async def safe_request(session, method, url, **kwargs):
 # ---------------------------
 
 async def login(session):
-    global login_start_time
-    login_start_time = time.time()
 
     resp, _ = await safe_request(session, "GET", "/index.html")
     if resp is None:
@@ -326,7 +394,9 @@ async def login(session):
     )
 
     if resp is None:
-        logger.warning("⚠️ Login request failed (no response)")
+        logger.warning(
+            "⚠️ Login request failed (no response from web interface)"
+        )
         return False
 
     return resp.status == 303
@@ -429,6 +499,15 @@ def publish_discovery(data_store):
 
     main_device_id = "wem_lokal_info"
 
+    wp_model = (
+        data_store.get("Wärmepumpe", {})
+        .get("Außengerät Variante", "")
+        .strip()
+    )
+
+    if not wp_model:
+        wp_model = "WEM Portal Lokal"
+
     main_device_payload = {
         "name": "Systemstatus",
         "uniq_id": "wem_lokal_info_status",
@@ -442,8 +521,8 @@ def publish_discovery(data_store):
             "identifiers": [main_device_id],
             "name": "WEM-Lokal Info",
             "manufacturer": "Weishaupt",
-            "model": "Web-Interface → MQTT"
-        }
+            "model": wp_model
+        }       
     }
 
     mqtt_publish(
@@ -453,7 +532,7 @@ def publish_discovery(data_store):
     )
 
     last_update_payload = {
-        "name": "Letztes erfolgreiches Update",
+        "name": "Update Sensoren",
         "uniq_id": "wem_lokal_last_update",
 
         "state_topic": LAST_UPDATE_TOPIC,
@@ -468,13 +547,42 @@ def publish_discovery(data_store):
             "identifiers": [main_device_id],
             "name": "WEM-Lokal Info",
             "manufacturer": "Weishaupt",
-            "model": "Web-Interface → MQTT"
+            "model": wp_model
         }
     }
 
     mqtt_publish(
         f"{MQTT_BASE}/sensor/wem_lokal_last_update/config",
         last_update_payload,
+        retain=True
+    )
+
+    success_payload = {
+        "name": "Erfolgsquote (Gestern)",
+        "uniq_id": "wem_daily_success",
+
+        "state_topic": DAILY_SUCCESS_TOPIC,
+
+        "json_attributes_topic": DAILY_SUCCESS_ATTR_TOPIC,
+
+        "unit_of_measurement": "%",
+        "icon": "mdi:chart-line",
+
+        "availability_topic": AVAILABILITY_TOPIC,
+        "payload_available": "online",
+        "payload_not_available": "offline",
+
+        "device": {
+            "identifiers": [main_device_id],
+            "name": "WEM-Lokal Info",
+            "manufacturer": "Weishaupt",
+            "model": wp_model
+        }
+    }
+
+    mqtt_publish(
+        f"{MQTT_BASE}/sensor/wem_daily_success/config",
+        success_payload,
         retain=True
     )
 
@@ -488,15 +596,6 @@ def publish_discovery(data_store):
         "2. WEZ": ("wem_lokal_wez2", "WEM-Lokal 2. WEZ"),
         "Statistik": ("wem_lokal_stats", "WEM-Lokal Statistik"),
     }
-
-    wp_model = (
-        data_store.get("Wärmepumpe", {})
-        .get("Außengerät Variante", "")
-        .strip()
-    )
-
-    if not wp_model:
-        wp_model = "WEM Portal Lokal"
 
     for section, values in data_store.items():
         if not values or section not in device_map:
@@ -556,12 +655,15 @@ def publish_discovery(data_store):
             elif key_lower == "drehzahl pumpe m1":
                 payload["unit_of_measurement"] = "%"
                 payload["state_class"] = "measurement"
-                if v_lower in ("aus", "0"):
-                    payload["value_template"] = "0"
-                else:
-                    payload["value_template"] = value_template.replace("}}", " | replace(' %','') }}")
+                payload["value_template"] = value_template.replace("}}", " | replace(' %','') }}")
 
             elif "status" in key_lower and section == "2. WEZ":
+                payload["value_template"] = (
+                    "{% set v = " + value_template.replace("{{", "").replace("}}", "") + " | int %}"
+                    "{{ 'Ein' if v == 1 else 'Aus' }}"
+                )
+
+            elif key_lower == "2. wez" and section == "2. WEZ":
                 payload["value_template"] = (
                     "{% set v = " + value_template.replace("{{", "").replace("}}", "") + " | int %}"
                     "{{ 'Ein' if v == 1 else 'Aus' }}"
@@ -670,11 +772,11 @@ def output_statistics():
         failed_pct = (failed / total) * 100
         total_pct = ((first + retry) / total) * 100
 
-        logger.info(f"{device}:")
-        logger.info(f"  First request successful: {first_pct:.1f} % ({first})")
-        logger.info(f"  Retry successful:      {retry_pct:.1f} % ({retry})")
-        logger.info(f"  Final failures: {failed_pct:.1f} % ({failed})")
-        logger.info(f"  Total successful:    {total_pct:.1f} % ({first + retry} of {total})")
+        logger.info(f" {device}:")
+        logger.info(f"  First-pass success rate: {first_pct:5.1f} % ({first})")
+        logger.info(f"  Retry-pass success rate: {retry_pct:5.1f} % ({retry})")
+        logger.info(f"  Overall failure rate:    {failed_pct:5.1f} % ({failed})")
+        logger.info(f"  Overall success rate:    {total_pct:5.1f} % ({first + retry}/{total})")
 
         system_total += total
         system_first += first
@@ -688,11 +790,46 @@ def output_statistics():
         system_failed_pct = (system_failed / system_total) * 100
         system_total_pct = ((system_first + system_retry) / system_total) * 100
 
-        logger.info("SYSTEM TOTAL:")
-        logger.info(f"  First request successful: {system_first_pct:.1f} % ({system_first})")
-        logger.info(f"  Retry successful:      {system_retry_pct:.1f} % ({system_retry})")
-        logger.info(f"  Final failures: {system_failed_pct:.1f} % ({system_failed})")
-        logger.info(f"  Total successful:    {system_total_pct:.1f} % ({system_first + system_retry} of {system_total})")
+        logger.info(" Overall system:")
+        logger.info(f"  First-pass success rate: {system_first_pct:5.1f} % ({system_first})")
+        logger.info(f"  Retry-pass success rate: {system_retry_pct:5.1f} % ({system_retry})")
+        logger.info(f"  Overall failure rate:    {system_failed_pct:5.1f} % ({system_failed})")
+        logger.info(f"  Overall success rate:    {system_total_pct:5.1f} % ({system_first + system_retry}/{system_total})")
+
+        stats_day = time.localtime(time.time() - 86400)
+
+        date_string = (
+            f"{stats_day.tm_mday:02d}."
+            f"{stats_day.tm_mon:02d}."
+            f"{stats_day.tm_year}"
+        )
+
+        mqtt_publish(
+            DAILY_SUCCESS_TOPIC,
+            round(system_total_pct, 1)
+        )
+
+        mqtt_publish(
+            DAILY_SUCCESS_ATTR_TOPIC,
+            {
+                "Datum": date_string,
+                "Abfragen": system_total,
+                "Erfolgreich": system_first + system_retry,
+                "Fehlgeschlagen": system_failed
+            }
+        )
+
+        save_daily_stats(
+            {
+                "success": round(system_total_pct, 1),
+                "attributes": {
+                    "Datum": date_string,
+                    "Abfragen": system_total,
+                    "Erfolgreich": system_first + system_retry,
+                    "Fehlgeschlagen": system_failed
+                }
+            }
+        )
 
     for device in stats:
         stats[device] = {
@@ -709,6 +846,9 @@ def output_statistics():
 async def main():
 
     global discovery_enabled
+    global initial_sync_done
+    global login_fail_count
+    global last_stats_day
 
     jar = aiohttp.CookieJar(unsafe=True)
 
@@ -721,28 +861,183 @@ async def main():
         last_success = time.time()
         last_status = "offline"
 
-        logger.info("📡 Discovery is active until all devices have delivered data at least once...")
-        log_missing_devices()
+        stored_stats = load_last_daily_stats()
 
-        logger.info("⏳ Background login in progress (full stabilization may take up to 5 minutes)")
+        if stored_stats:
+
+            mqtt_publish(
+                DAILY_SUCCESS_TOPIC,
+                stored_stats["success"]
+            )
+
+            mqtt_publish(
+                DAILY_SUCCESS_ATTR_TOPIC,
+                stored_stats["attributes"]
+            )
+
+        else:
+
+            mqtt_publish(
+                DAILY_SUCCESS_TOPIC,
+                0
+            )
+
+            mqtt_publish(
+                DAILY_SUCCESS_ATTR_TOPIC,
+                {
+                    "Datum": "Noch nicht verfügbar",
+                    "Abfragen": 0,
+                    "Erfolgreich": 0,
+                    "Fehlgeschlagen": 0
+                }
+            )
+
+        logger.info("📡 Discovery active until all devices provide initial data")
+
+        logger.info("ℹ️ Initial connection in progress (may take up to 5 minutes)")
 
         resp, _ = await safe_request(session, "GET", "/index.html")
 
         if resp is None:
-            logger.error("❌ Web interface not reachable")
+            logger.error("❌ Web interface not reachable – entering recovery wait mode (15 minutes)")
             logger.error(f"🔧 Technical info: IP {IP} could not be contacted")
-            logger.error("🛑 App has been stopped.")
-            while True:
-                await asyncio.sleep(3600)
+            logger.error("🔍 Please check:")
+            logger.error("   • Web interface IP address")
+            logger.error("   • Whether the web interface is enabled")
+            logger.error("   • Network connectivity")
+            logger.error("   • Firewall / VLAN settings")
+            logger.error("⏳ Waiting 15 minutes before restart")
+            
+            await asyncio.sleep(900)
+            logger.error("🛑 Recovery timeout expired – restarting application")
+            sys.exit(1)
 
         while True:
 
             if not await login(session):
-                logger.warning("⚠️ Login failed – retrying in 10s")
+
+                login_fail_count += 1
+
+                logger.warning(
+                    f"⚠️ Login failed ({login_fail_count} consecutive attempts) – retrying in 10s"
+                )
+
+                if login_fail_count == 5:
+                    logger.error("❌ Login has failed 5 consecutive times")
+                    logger.error("🔍 Please check:")
+                    logger.error("   • Username")
+                    logger.error("   • Password")
+                    logger.error("   • HEX code")
+                    logger.error("   • Web interface settings")
+
                 await asyncio.sleep(10)
                 continue
 
+            login_fail_count = 0
+
             await asyncio.sleep(5.0)
+
+            session_broken = False
+            
+            # ---------------------------
+            # WP-FAST-CHECK (Heat pump fast check until first valid data)
+            # ---------------------------
+
+            if not initial_sync_done:
+
+                while True:
+                    values = await fetch(session, "Wärmepumpe", URLS["Wärmepumpe"])
+
+                    if values is None:
+                        session_broken = True
+                        break
+
+                    if values:
+                        data_store["Wärmepumpe"] = values
+                        device_ready["Wärmepumpe"] = True
+                        log_device_ready("Wärmepumpe")
+
+                        mqtt_publish(
+                            LAST_UPDATE_TOPIC,
+                            datetime.fromtimestamp(time.time(), timezone.utc).isoformat()
+                        )
+
+                        mqtt_publish(
+                            MQTT_STATE_TOPIC,
+                            {"WEM-Lokal Info": build_clean_data(data_store)}
+                        )
+
+                        break  # Heat pump delivered data → fast-check completed
+
+                    await asyncio.sleep(3)  # Fast-check interval
+
+                if session_broken:
+                    continue
+                    
+            # ---------------------------
+            # INITIAL SYNC (optimized)
+            # ---------------------------
+
+            if not initial_sync_done:
+
+                for dev in INITIAL_SYNC_ORDER:
+
+                    if dev not in URLS:
+                        continue
+
+                    values = {}
+
+                    for attempt in range(INITIAL_SYNC_RETRIES + 1):
+
+                        values = await fetch(session, dev, URLS[dev])
+
+                        if values is None:
+                            session_broken = True
+                            break
+
+                        if values:
+                            break
+
+                        if attempt < INITIAL_SYNC_RETRIES:
+                            logger.info(
+                                f"🔄 Initial sync retry {attempt + 1}/{INITIAL_SYNC_RETRIES} ({dev})"
+                            )
+                            await asyncio.sleep(INITIAL_SYNC_RETRY_DELAY)
+
+                    if session_broken:
+                        break
+
+                    if values:
+                        data_store[dev] = values
+                        device_ready[dev] = True
+                        log_device_ready(dev)
+
+                        mqtt_publish(
+                            LAST_UPDATE_TOPIC,
+                            datetime.fromtimestamp(
+                                time.time(),
+                                timezone.utc
+                            ).isoformat()
+                        )
+
+                        mqtt_publish(
+                            MQTT_STATE_TOPIC,
+                            {"WEM-Lokal Info": build_clean_data(data_store)}
+                        )
+
+                    else:
+                        logger.warning(
+                            f"⚠️ Initial sync failed for {dev}"
+                        )
+
+                    # Retry polling during initial synchronization
+                    await asyncio.sleep(2)
+
+                if not session_broken:
+                    initial_sync_done = True
+                    logger.info(
+                        "🔄 Initial sync completed – switching to Round Robin polling"
+                    )
 
             while True:
 
@@ -778,67 +1073,42 @@ async def main():
                         if not device_ready[name]:
                             device_ready[name] = True
                             log_device_ready(name)
-                            log_missing_devices()
-
-                    clean_data_store = {}
-
-                    for section, vals in data_store.items():
-
-                        clean_vals = {}
-
-                        for key, value in vals.items():
-
-                            v = str(value).strip()
-
-                            if v.lower() == "aus":
-                                clean_vals[key] = "0"
-
-                            elif v.lower() == "ein":
-                                clean_vals[key] = "1"
-
-                            else:
-                                v = v.replace(" KW", "")
-                                v = v.replace(" kW", "")
-                                v = v.replace(",", ".")
-                                clean_vals[key] = v
-
-                        clean_data_store[section] = clean_vals
 
                     mqtt_publish(
                         MQTT_STATE_TOPIC,
-                        {"WEM-Lokal Info": clean_data_store}
+                        {"WEM-Lokal Info": build_clean_data(data_store)}
                     )
 
                     if discovery_enabled:
                         publish_discovery(data_store)
 
                         if all_devices_ready():
-                            logger.info("✅ All devices have delivered data – discovery will be disabled")
+                            logger.info("ℹ️ All devices provided initial data – discovery disabled")
                             log_summary_after_discovery(data_store)
-                            logger.info("🕒 Daily statistics of data polling will be generated at 00:00")
+                            logger.info("🕒 Daily polling statistics will be generated at 00:00")
                             discovery_enabled = False
 
-                    weekday_short = {
-                        0: "Mon", 1: "Tue", 2: "Wed", 3: "Thu",
-                        4: "Fri", 5: "Sat", 6: "Sun"
-                    }
-
+                    # ---------------------------------------------------------
+                    # DAILY STATISTICS TRIGGER
+                    # ---------------------------------------------------------
                     now = time.localtime()
 
-                    if now.tm_hour == 0 and now.tm_min == 0:
+                    if now.tm_yday != last_stats_day:
 
+                        # Statistik wird für den Vortag erzeugt
                         stats_day = time.localtime(time.time() - 86400)
 
+                        weekday_short = {
+                            0: "Mon", 1: "Tue", 2: "Wed", 3: "Thu",
+                            4: "Fri", 5: "Sat", 6: "Sun"
+                        }
+
                         weekday_str = weekday_short[stats_day.tm_wday]
-                        date_str = time.strftime("%Y-%m-%d", stats_day)
-
-                        logger.info(f"🕒 Creating daily statistics for {weekday_str}, {date_str}")
-
+                        date_str = f"{weekday_str}, {stats_day.tm_year}-{stats_day.tm_mon:02d}-{stats_day.tm_mday:02d}"
+                        logger.info(f"🕒 Creating daily statistics for {date_str}")
                         output_statistics()
-
-                        logger.info(f"🕒 Daily statistics generated for {weekday_str}, {date_str}")
-
-                        await asyncio.sleep(60)
+                        logger.info(f"🕒 Daily statistics generated for {date_str}")
+                        last_stats_day = now.tm_yday
 
                     if time.time() - last_success > OFFLINE_TIMEOUT and last_status != "offline":
                         mqtt_publish(SYSTEM_STATUS_TOPIC, "offline")
