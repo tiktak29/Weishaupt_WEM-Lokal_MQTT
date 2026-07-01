@@ -1,5 +1,38 @@
 # Changelog
 
+## v1.0.2 – Configuration Cleanup & Stability Improvements
+
+### Changes
+
+* **Updated `config.json`**
+  - Removed deprecated option `enable_wp`
+  - Cleaned up and aligned all configuration keys with the current feature set
+  - Synchronized `options` and `schema`
+  - Added strict validation for `polling_seconds` using predefined allowed values
+
+* **Improved URL and device activation logic**
+  - URL generation now follows the enabled modules (`HK1`, `HK2`, `Statistik`, `WEZ2`)
+  - Removed unused WP module references
+  - Kept `URLS` and `SEQUENCE` automatically synchronized with the active configuration
+
+* **Script stability improvements**
+  - Refined initial synchronization logic
+  - Improved Round-Robin polling behavior
+  - Improved recovery from `session_broken` states
+  - Refined daily statistics trigger and reset handling
+  - Improved MQTT state publishing consistency
+
+* **Repository metadata**
+  - Updated repository URL in `config.json`
+  - Updated version to `1.0.2`
+
+### Notes
+
+This release focuses on **configuration cleanup**, **legacy code removal**, and **overall stability improvements**.
+
+No breaking changes for existing Home Assistant installations.
+
+
 ## v1.0.1 – System Status & Last Update Enhancements
 
 ### New Features
