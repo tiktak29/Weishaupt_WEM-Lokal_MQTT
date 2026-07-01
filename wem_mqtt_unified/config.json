@@ -1,6 +1,6 @@
 {
   "name": "Weishaupt WEM-Lokal MQTT",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "slug": "wem_mqtt_unified",
   "description": "Local integration for the Weishaupt WEM web interface via MQTT",
   "url": "https://github.com/tiktak29/Weishaupt_WEM-Lokal_MQTT",
@@ -19,7 +19,6 @@
     "mqtt_username": "mqtt_client",
     "mqtt_password": "",
 
-    "enable_wp": true,
     "enable_hk1": true,
     "enable_hk2": true,
     "enable_stats": true,
@@ -39,7 +38,6 @@
     "mqtt_username": "str",
     "mqtt_password": "password",
 
-    "enable_wp": "bool",
     "enable_hk1": "bool",
     "enable_hk2": "bool",
     "enable_stats": "bool",
