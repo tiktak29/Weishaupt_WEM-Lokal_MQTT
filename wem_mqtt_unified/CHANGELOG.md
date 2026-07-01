@@ -2,6 +2,17 @@
 
 ## v1.0.2 – Configuration Cleanup & Stability Improvements
 
+> ⚠️ **Important upgrade note**
+> This release updates the configuration schema. Home Assistant does **not** reload schema changes during normal updates.
+>
+> To apply the new configuration correctly, please **uninstall the add-on once and install it again**.
+>
+> This ensures:
+> - the new `config.json` is loaded
+> - removed options (e.g., `enable_wp`) disappear
+> - Supervisor warnings stop
+> - the configuration UI matches the new schema
+
 ### Changes
 
 * **Updated `config.json`**
@@ -31,6 +42,7 @@
 This release focuses on **configuration cleanup**, **legacy code removal**, and **overall stability improvements**.
 
 No breaking changes for existing Home Assistant installations.
+
 
 
 ## v1.0.1 – System Status & Last Update Enhancements
