@@ -16,7 +16,7 @@ Local data extraction from Weishaupt heat pumps via the integrated Weishaupt con
 > 📌 **Important upgrade note (v1.0.2)**
 > This release updates the configuration schema. Home Assistant does **not** reload schema changes during normal updates.
 >
-> To ensure the new configuration is applied correctly, please **uninstall the add-on once and install it again**.
+> To ensure the new configuration is applied correctly, please **uninstall the app (formerly add-on) once and install it again**.
 >
 > This refreshes the schema, removes deprecated options (e.g., `enable_wp`), and prevents repeated Supervisor warnings.
 
