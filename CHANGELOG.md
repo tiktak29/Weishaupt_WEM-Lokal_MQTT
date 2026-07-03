@@ -5,7 +5,7 @@
 > ⚠️ **Important upgrade note**
 > This release updates the configuration schema. Home Assistant does **not** reload schema changes during normal updates.
 >
-> To apply the new configuration correctly, please **uninstall the add-on once and install it again**.
+> To apply the new configuration correctly, please **uninstall the app (formerly add-on) once and install it again**.
 >
 > This ensures:
 > - the new `config.json` is loaded
