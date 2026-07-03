@@ -28,7 +28,9 @@ To help improve compatibility across different Weishaupt WEM configurations, ple
 
 ➡️ **[Feedback: Tested WEM-Lokal Heat Pump Configurations](https://github.com/tiktak29/Weishaupt_WEM-Lokal_MQTT/discussions/1)**
 
-#### Tested with a Weishaupt WAB 14 (EC WAB V5.3 R10 / WWP‑SG V5.0)
+#### Tested with a Weishaupt WAB 14 (EC WAB V5.3 R10 / WWP‑SG V5.0) — developer system<br>
+#### Tested with a Weishaupt WBB 12 (controller version not specified) — user feedback
+
 
 ---
 
