@@ -78,7 +78,7 @@ Developed to integrate Weishaupt systems into modern Home Assistant environments
 - Support for current and legacy MQTT libraries (paho‑mqtt API v1/v2)  
 
 ### Supported Devices
-- Heat pump  
+- Heat pump (always enabled automatically)  
 - Heating circuit 1  
 - Heating circuit 2  
 - Statistics  
@@ -101,8 +101,9 @@ Developed to integrate Weishaupt systems into modern Home Assistant environments
   - Daily communication statistics 
 
 ### Advanced Features
-- Automatic heat pump model detection  
-- Dynamic activation of individual device sections   
+- Automatic heat pump model detection
+- Automatic activation of the heat pump section  
+- Dynamic activation of HK1, HK2, Statistics and WEZ2   
 - MQTT connection status monitoring  
 - Extended diagnostic information for improved troubleshooting  
 - Fully local operation without external dependencies
@@ -147,11 +148,14 @@ https://github.com/tiktak29/Weishaupt_WEM-Lokal_MQTT
 | `mqtt_username` | MQTT username |
 | `mqtt_password` | MQTT password |
 | `polling_seconds` | Polling interval in seconds |
-| `enable_wp` | Heat pump |
 | `enable_hk1` | Heating circuit 1 |
 | `enable_hk2` | Heating circuit 2 |
 | `enable_stats` | Statistics |
 | `enable_wez2` | Second auxiliary heater (WEZ2) |
+
+> ℹ️ Note:  
+> The heat pump section (`enable_wp`) was removed in v1.0.2.  
+> The app now automatically detects and activates the heat pump device.  
 
 ![Configuration 1](images/config-1.jpg)  
 ![Configuration 2](images/config-2.jpg)
