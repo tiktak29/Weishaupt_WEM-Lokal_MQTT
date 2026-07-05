@@ -85,7 +85,7 @@ Developed to integrate Weishaupt systems into modern Home Assistant environments
 - Home Assistant  
 - MQTT broker (e.g., Mosquitto)
 
-<sub>💡 Additional information regarding the web interface is provided in the lower section of this document.</sub>
+<sub>💡 Additional information regarding the web interface is provided in the section <a href="#important-notice">Important Notice</a>.</sub>
 
 ---
 
