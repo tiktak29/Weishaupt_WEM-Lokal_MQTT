@@ -170,11 +170,11 @@ https://github.com/tiktak29/Weishaupt_WEM-Lokal_MQTT
 | `mqtt_port` | MQTT port |
 | `mqtt_username` | MQTT username |
 | `mqtt_password` | MQTT password |
-| `polling_seconds` | Polling interval |
 | `enable_hk1` | Heating circuit 1 |
 | `enable_hk2` | Heating circuit 2 |
 | `enable_stats` | Statistics |
 | `enable_wez2` | Second auxiliary heater |
+| `polling_seconds` | Polling interval |
 
 > ℹ️ Note:  
 > The heat pump section (`enable_wp`) was removed in v1.0.2.  
