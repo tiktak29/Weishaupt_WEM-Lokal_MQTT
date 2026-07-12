@@ -1,8 +1,83 @@
 # Changelog
 
-## v1.0.2 – Configuration Cleanup & Stability Improvements
+## v1.1.0 – Fully Automatic WebIF Detection
 
 > ⚠️ **Important upgrade note**
+>
+> This release introduces a completely redesigned startup process and a simplified configuration.
+>
+> A direct update from v1.0.x to v1.1.0 is supported, and the app should continue to run normally.
+>
+> However, obsolete configuration options from v1.0.x may remain stored internally and generate repeated Supervisor warnings.
+>
+> **For a clean migration, existing v1.0.x users should first update to v1.1.0, then uninstall the app once and install it again.**
+>
+> The v1.1.0 app remains available in the Home Assistant App Store after uninstalling and can be installed again directly.
+>
+> This ensures:
+>
+> * obsolete configuration options are removed
+> * Supervisor warnings caused by old options are eliminated
+> * the new configuration schema is applied cleanly
+> * only the configuration options required by v1.1.0 are stored
+
+### Changes
+
+* **Fully automatic WebIF detection**
+
+  * Added automatic detection of the WebIF overview and supported data structure
+  * Added automatic detection of all supported WebIF data URLs
+  * Removed the need for manual HEX configuration
+  * Removed all static WebIF data URLs
+  * Removed all model-specific URL handling
+
+* **Automatic device detection**
+
+  * Added automatic detection of all supported WebIF devices
+  * Added dynamic support for heating circuits HK1–HK4
+  * Polling sequence is now generated automatically based on detected devices
+  * MQTT Discovery now creates only detected devices
+
+* **Configuration simplification**
+
+  * Removed `webinterface_hex_code`
+  * Removed `enable_hk1`
+  * Removed `enable_hk2`
+  * Removed `enable_stats`
+  * Removed `enable_wez2`
+  * Reduced configuration to WebIF credentials, MQTT settings and polling interval
+
+* **Startup improvements**
+
+  * Added automatic WebIF initialization
+  * Added automatic overview detection
+  * Added automatic data URL detection
+  * Added automatic active device detection
+  * Improved startup logging
+  * Added optional `DEBUG_WEBIF` logging for diagnostics
+
+* **Documentation**
+
+  * Completely reworked README
+  * Added compatibility documentation
+  * Added WebIF activation guide
+  * Added WebIF login instructions
+  * Added startup log documentation
+  * Added operating recommendations
+  * Updated installation and configuration guide
+
+### Notes
+
+This release represents the largest architectural improvement since the initial project release.
+
+The app now adapts automatically to the connected Weishaupt controller and its available WebIF devices without requiring manual HEX configuration, static URLs or manual device selection.
+
+The core communication, session handling, retry logic, Round-Robin polling and MQTT communication remain unchanged and continue to build on the proven architecture introduced in previous releases.
+
+## v1.0.2 – Configuration Cleanup & Stability Improvements  
+
+> ⚠️ **Important upgrade note**
+> 
 > This release updates the configuration schema. Home Assistant does **not** reload schema changes during normal updates.
 >
 > To apply the new configuration correctly, please **uninstall the app (formerly add-on) once and install it again**.
@@ -42,8 +117,6 @@
 This release focuses on **configuration cleanup**, **legacy code removal**, and **overall stability improvements**.
 
 No breaking changes for existing Home Assistant installations.
-
-
 
 ## v1.0.1 – System Status & Last Update Enhancements
 

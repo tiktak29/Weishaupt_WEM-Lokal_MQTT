@@ -14,6 +14,8 @@ initial_sync_done = False
 INITIAL_SYNC_ORDER = [
     "Heizkreis 1",
     "Heizkreis 2",
+    "Heizkreis 3",
+    "Heizkreis 4",
     "Statistik",
     "2. WEZ"
 ]
@@ -21,6 +23,12 @@ INITIAL_SYNC_ORDER = [
 INITIAL_SYNC_RETRIES = 2
 INITIAL_SYNC_RETRY_DELAY = 2
 login_fail_count = 0
+
+# ---------------------------
+# DEBUG
+# ---------------------------
+
+DEBUG_WEBIF = False
 
 # ---------------------------
 # GLOBALS
@@ -65,12 +73,6 @@ with open("/data/options.json") as f:
 IP = config.get("webinterface_ip_address", "").strip()
 USERNAME = config.get("webinterface_username", "").strip()
 PASSWORD = config.get("webinterface_password", "").strip()
-HEX = config.get("webinterface_hex_code", "").strip()
-
-ENABLE_HK1 = config.get("enable_hk1", True)
-ENABLE_HK2 = config.get("enable_hk2", True)
-ENABLE_STATS = config.get("enable_stats", True)
-ENABLE_WEZ2 = config.get("enable_wez2", True)
 
 if not IP:
     raise ValueError("webinterface_ip_address missing")
@@ -78,57 +80,65 @@ if not USERNAME:
     raise ValueError("webinterface_username missing")
 if not PASSWORD:
     raise ValueError("webinterface_password missing")
-if not HEX:
-    raise ValueError("webinterface_hex_code missing")
-
 BASE_URL = f"http://{IP}"
 
-def build_urls(hex_code):
-    info = f"0C00000100000000008000{hex_code}010002000301"
+# URLS are detected dynamically after login from the WEM Profimodus pages.
+# They intentionally start empty so no manual HEX code or static URL generation is required.
+URLS = {}
+device_ready = {}
+SEQUENCE = []
 
-    stacks = {
-    
-        "Wärmepumpe": f"0C000C2200000000000000{hex_code}020003000401",
-        "Heizkreis 1": f"0C000C1900000000000000{hex_code}020003000401",
-        "Heizkreis 2": f"0C000C1A00000000000000{hex_code}020003000401",
-        "Statistik":   f"0C000C2700000000000000{hex_code}020003000401",
-        "2. WEZ":      f"0C000C2300000000000000{hex_code}020003000401",
-    }
+SUPPORTED_DYNAMIC_DEVICES = [
+    "Wärmepumpe",
+    "Heizkreis 1",
+    "Heizkreis 2",
+    "Heizkreis 3",
+    "Heizkreis 4",
+    "Statistik",
+    "2. WEZ",
+]
 
-    return {
-        name: f"/settings_export.html?stack={info},{stack}"
-        for name, stack in stacks.items()
-    }
+def build_round_robin_sequence(active_urls):
+    """
+    Build the effective Round Robin sequence from BASE_SEQUENCE and the
+    dynamically active URL set. Consecutive duplicate devices are collapsed
+    so missing optional devices do not create repeated direct WP polling.
+    """
+    sequence = []
 
-all_urls = build_urls(HEX)
+    for device in BASE_SEQUENCE:
+        if device not in active_urls:
+            continue
 
-URLS = {
-    "Wärmepumpe": all_urls["Wärmepumpe"] 
-}
-if ENABLE_HK1: URLS["Heizkreis 1"] = all_urls["Heizkreis 1"]
-if ENABLE_HK2: URLS["Heizkreis 2"] = all_urls["Heizkreis 2"]
-if ENABLE_STATS: URLS["Statistik"] = all_urls["Statistik"]
-if ENABLE_WEZ2: URLS["2. WEZ"] = all_urls["2. WEZ"]
+        if sequence and sequence[-1] == device:
+            continue
 
-device_ready = {name: False for name in URLS.keys()}
+        sequence.append(device)
+
+    return sequence
+
 
 BASE_SEQUENCE = [
-    "Wärmepumpe", "Heizkreis 1", "Wärmepumpe", "Heizkreis 2",
-    "Wärmepumpe", "Statistik", "Wärmepumpe", "Heizkreis 1",
-    "Wärmepumpe", "Heizkreis 2", "Wärmepumpe", "Statistik",
+    "Wärmepumpe", "Heizkreis 1",
+    "Wärmepumpe", "Heizkreis 2",
+    "Wärmepumpe", "Heizkreis 3",
+    "Wärmepumpe", "Heizkreis 4",
+    "Wärmepumpe", "Statistik",
+    "Wärmepumpe", "Heizkreis 1",
+    "Wärmepumpe", "Heizkreis 2",
+    "Wärmepumpe", "Heizkreis 3",
+    "Wärmepumpe", "Heizkreis 4",
+    "Wärmepumpe", "Statistik",
     "Wärmepumpe", "2. WEZ",
 ]
 
-SEQUENCE = [device for device in BASE_SEQUENCE if device in URLS]
+SEQUENCE = build_round_robin_sequence(URLS)
 
 # ---------------------------
 # STATISTICS
 # ---------------------------
 
-stats = {
-    name: {"total": 0, "first_success": 0, "retry_success": 0, "failed": 0}
-    for name in URLS.keys()
-}
+stats = {}
 
 raw_pause = config.get("polling_seconds", 10)
 try:
@@ -190,7 +200,11 @@ def on_connect(client, userdata, flags, rc, properties=None):
     else:
         logger.error(f"❌  MQTT connection failed (rc={rc})")
 
-def on_disconnect(client, userdata, rc, properties=None):
+def on_disconnect(client, userdata, rc=None, properties=None, *args):
+    """
+    Compatible with both paho-mqtt callback API variants.
+    Some versions pass an additional reason/properties argument on disconnect.
+    """
     if rc == 0:
         logger.info("🔌 MQTT disconnected cleanly")
     else:
@@ -401,6 +415,259 @@ async def login(session):
 
     return resp.status == 303
 
+
+# ---------------------------
+# WEBIF OVERVIEW DETECTION (READ-ONLY TEST)
+# ---------------------------
+
+async def detect_webif_overview(session):
+    """
+    Read-only detection of the Profimodus overview page.
+
+    Return semantics intentionally match the proven fetch() architecture:
+    - None  = session broken / login page / no response
+    - {}    = page readable, but no usable overview entries detected
+    - dict  = valid overview entries detected
+
+    This function does not change URLS, device_ready, SEQUENCE or stats.
+    """
+
+    resp, html = await safe_request(
+        session,
+        "GET",
+        "/settings_export.html",
+        headers=HEADERS
+    )
+
+    if resp is None or html is None:
+        if DEBUG_WEBIF:
+            logger.warning("⚠️ No response while reading Profimodus overview")
+        return None
+
+    # IMPORTANT:
+    # Use the same proven login-page detection pattern as fetch().
+    if "form-signin" in html.lower() or "bitte anmelden" in html.lower():
+        if DEBUG_WEBIF:
+            logger.warning("⚠️ Profimodus overview returned login page – session not authenticated")
+        return None
+
+    soup = BeautifulSoup(html, "html.parser")
+    detected = {}
+
+    for link in soup.find_all("a", href=True):
+        href = link.get("href", "")
+        h5 = link.find("h5")
+
+        if not h5:
+            continue
+
+        if "settings_export.html?stack=" not in href:
+            continue
+
+        stack = href.split("stack=", 1)[1].strip()
+
+        # The overview / 1st-stack page must contain only single-stack links.
+        # If the WEM WebIF returns a deeper page, comma-stack links are ignored here.
+        if "," in stack:
+            continue
+
+        name = h5.get_text(strip=True)
+
+        if name and stack:
+            detected[name] = stack
+
+    if not detected:
+        if DEBUG_WEBIF:
+            logger.warning("⚠️ Profimodus overview readable, but no overview entries detected")
+        return {}
+
+    # Guard against the WEM WebIF occasionally returning a wrong or incomplete page.
+    # The real 1st-stack overview contains "Fehlerspeicher"; the 2nd-stack data URL
+    # page is guarded separately by requiring "Statistik".
+    if "Fehlerspeicher" not in detected:
+        if DEBUG_WEBIF:
+            logger.warning(
+                "⚠️ WebIF overview does not contain Fehlerspeicher – likely wrong/incomplete 1st-stack page; retrying"
+            )
+        return {}
+
+    if DEBUG_WEBIF:
+        logger.info("🔍 Detected WebIF overview:")
+        for name, stack in detected.items():
+            logger.info(f"   • {name}: {stack}")
+    return detected
+
+
+async def detect_webif_overview_fast_check(session):
+    """
+    Profimodus fast-check using the same control principle as the proven
+    WP-Fast-Check:
+
+    - None  = session broken / login page / no response -> caller should re-login
+    - {}    = page readable, but no usable overview entries -> keep polling
+    - dict  = valid overview entries detected -> success
+
+    This is still read-only and does not change URLS, device_ready, SEQUENCE or stats.
+    """
+
+    attempt = 1
+
+    while True:
+        if DEBUG_WEBIF:
+            logger.info(f"🔍 Detecting WebIF overview (attempt {attempt})")
+
+        detected = await detect_webif_overview(session)
+
+        if detected is None:
+            if DEBUG_WEBIF:
+                logger.warning("⚠️ WebIF overview detection failed – session will be renewed")
+            return None
+
+        if detected:
+            logger.info("✅ WebIF overview detection completed")
+            return detected
+
+        # detected == {} -> page was readable, but no usable overview entries were found.
+        if DEBUG_WEBIF:
+            logger.info("⏳ WebIF overview contained no usable entries – retrying in 3s")
+        await asyncio.sleep(3)
+        attempt += 1
+
+
+
+# ---------------------------
+# WEBIF DATA URL DETECTION (READ-ONLY TEST)
+# ---------------------------
+
+async def detect_webif_data_urls(session, overview):
+    """
+    Read-only detection of the final data URLs from the Info 1st-stack page.
+
+    Input:
+    - overview: dict from detect_webif_overview(), containing the 1st-stack links.
+
+    Return semantics intentionally match the proven fetch() architecture:
+    - None  = session broken / login page / no response
+    - {}    = page readable, but no usable data URLs detected
+    - dict  = valid data URLs detected
+
+    This function does not change URLS, device_ready, SEQUENCE or stats.
+    """
+
+    info_stack = overview.get("Info") if overview else None
+
+    if not info_stack:
+        if DEBUG_WEBIF:
+            logger.warning("⚠️ Info stack missing – unable to detect WebIF data URLs")
+        return {}
+
+    info_url = f"/settings_export.html?stack={info_stack}"
+
+    resp, html = await safe_request(
+        session,
+        "GET",
+        info_url,
+        headers=HEADERS
+    )
+
+    if resp is None or html is None:
+        if DEBUG_WEBIF:
+            logger.warning("⚠️ No response while reading WebIF Info stack")
+        return None
+
+    # IMPORTANT:
+    # Use the same proven login-page detection pattern as fetch().
+    if "form-signin" in html.lower() or "bitte anmelden" in html.lower():
+        if DEBUG_WEBIF:
+            logger.warning("⚠️ WebIF Info stack returned login page – session not authenticated")
+        return None
+
+    soup = BeautifulSoup(html, "html.parser")
+    detected = {}
+
+    for link in soup.find_all("a", href=True):
+        href = link.get("href", "").strip()
+        h5 = link.find("h5")
+
+        if not h5:
+            continue
+
+        if "settings_export.html?stack=" not in href:
+            continue
+
+        # The final data URLs contain two stacks separated by a comma.
+        if "," not in href:
+            continue
+
+        name = h5.get_text(strip=True)
+
+        if not name:
+            continue
+
+        # Keep the complete URL exactly as provided by the WebIF.
+        # Normalize only the leading slash so it matches the existing URLS format.
+        if href.startswith("/"):
+            final_url = href
+        else:
+            final_url = "/" + href
+
+        detected[name] = final_url
+
+    if not detected:
+        if DEBUG_WEBIF:
+            logger.warning("⚠️ WebIF Info stack readable, but no data URLs detected")
+        return {}
+
+    # Guard against the WEM WebIF occasionally returning the 1st-stack overview
+    # instead of the expected Info subpage with 2nd-stack data URLs.
+    # The 2nd-stack device list contains "Statistik"; the 1st-stack overview does not.
+    # If Statistik is missing, this page is not accepted and will be polled again,
+    # using the same {} retry semantics as the proven WP-Fast-Check.
+    if "Statistik" not in detected:
+        if DEBUG_WEBIF:
+            logger.warning(
+                "⚠️ WebIF data URL page does not contain Statistik – likely wrong page / 1st-stack overview; retrying"
+            )
+        return {}
+
+    return detected
+
+
+async def detect_webif_data_urls_fast_check(session, overview):
+    """
+    Data-URL fast-check using the same control principle as the proven
+    WP-Fast-Check and the Profimodus overview fast-check.
+
+    - None  = session broken / login page / no response -> caller should re-login
+    - {}    = page readable, but no usable data URLs -> keep polling
+    - dict  = valid data URLs detected -> success
+
+    This is still read-only and does not change URLS, device_ready, SEQUENCE or stats.
+    """
+
+    attempt = 1
+
+    while True:
+        if DEBUG_WEBIF:
+            logger.info(f"🔍 Detecting WebIF data URLs (attempt {attempt})")
+
+        detected = await detect_webif_data_urls(session, overview)
+
+        if detected is None:
+            if DEBUG_WEBIF:
+                logger.warning("⚠️ WebIF data URL detection failed – session will be renewed")
+            return None
+
+        if detected:
+            logger.info("✅ WebIF data URL detection completed")
+            return detected
+
+        # detected == {} -> page was readable, but no usable data URLs were found.
+        if DEBUG_WEBIF:
+            logger.info("⏳ WebIF Info stack contained no usable data URLs – retrying in 3s")
+        await asyncio.sleep(3)
+        attempt += 1
+
 # ---------------------------
 # PARSER
 # ---------------------------
@@ -490,6 +757,56 @@ async def fetch(session, name, url):
 
     stats[name]["first_success"] += 1
     return values
+
+
+# ---------------------------
+# DYNAMIC URL APPLY
+# ---------------------------
+
+def apply_detected_data_urls(data_urls):
+    """
+    Apply dynamically detected final WebIF data URLs.
+
+    This replaces only the URL/device initialization data.
+    The existing login, safe_request, fetch, WP fast check,
+    initial sync, round robin, MQTT, discovery and statistics logic
+    continue to use the same structures as before.
+    """
+    global URLS
+    global device_ready
+    global SEQUENCE
+    global stats
+
+    if not data_urls or "Wärmepumpe" not in data_urls:
+        logger.error("❌ Dynamic WebIF data URLs incomplete – Wärmepumpe URL missing")
+        return False
+
+    new_urls = {}
+
+    for device in SUPPORTED_DYNAMIC_DEVICES:
+        if device in data_urls:
+            new_urls[device] = data_urls[device]
+
+    URLS = new_urls
+    device_ready = {name: False for name in URLS.keys()}
+    SEQUENCE = build_round_robin_sequence(URLS)
+    stats = {
+        name: {"total": 0, "first_success": 0, "retry_success": 0, "failed": 0}
+        for name in URLS.keys()
+    }
+
+    logger.info("✅ Using dynamically detected WebIF data URLs")
+
+    logger.info("🔍 Detected WebIF data URLs:")
+    url_name_width = max(len(name) for name in URLS.keys())
+    for name, url in URLS.items():
+        logger.info(f"   • {name:<{url_name_width}}: {url}")
+
+    logger.info("📋 Active WebIF devices:")
+    for name in URLS.keys():
+        logger.info(f"   • {name}")
+
+    return True
 
 # ---------------------------
 # MQTT DISCOVERY
@@ -593,6 +910,8 @@ def publish_discovery(data_store):
         "Wärmepumpe": ("wem_lokal_wp", "WEM-Lokal Wärmepumpe"),
         "Heizkreis 1": ("wem_lokal_hk1", "WEM-Lokal Heizkreis 1"),
         "Heizkreis 2": ("wem_lokal_hk2", "WEM-Lokal Heizkreis 2"),
+        "Heizkreis 3": ("wem_lokal_hk3", "WEM-Lokal Heizkreis 3"),
+        "Heizkreis 4": ("wem_lokal_hk4", "WEM-Lokal Heizkreis 4"),
         "2. WEZ": ("wem_lokal_wez2", "WEM-Lokal 2. WEZ"),
         "Statistik": ("wem_lokal_stats", "WEM-Lokal Statistik"),
     }
@@ -669,7 +988,7 @@ def publish_discovery(data_store):
                     "{{ 'Ein' if v == 1 else 'Aus' }}"
                 )
 
-            elif key_lower == "pumpe" and section == "Heizkreis 2":
+            elif key_lower == "pumpe" and section.startswith("Heizkreis"):
                 payload["value_template"] = (
                     "{% set v = " + value_template.replace("{{", "").replace("}}", "") + " | int %}"
                     "{{ 'Ein' if v == 1 else 'Aus' }}"
@@ -745,7 +1064,15 @@ def publish_discovery(data_store):
 
 def output_statistics():
 
-    order = ["Wärmepumpe", "Heizkreis 1", "Heizkreis 2", "Statistik", "2. WEZ"]
+    order = [
+        "Wärmepumpe",
+        "Heizkreis 1",
+        "Heizkreis 2",
+        "Heizkreis 3",
+        "Heizkreis 4",
+        "Statistik",
+        "2. WEZ"
+    ]
 
     system_total = 0
     system_first = 0
@@ -849,6 +1176,10 @@ async def main():
     global initial_sync_done
     global login_fail_count
     global last_stats_day
+    global URLS
+    global device_ready
+    global SEQUENCE
+    global stats
 
     jar = aiohttp.CookieJar(unsafe=True)
 
@@ -857,7 +1188,8 @@ async def main():
         cookie_jar=jar
     ) as session:
 
-        data_store = {key: {} for key in URLS.keys()}
+        data_store = {}
+        dynamic_urls_ready = False
         last_success = time.time()
         last_status = "offline"
 
@@ -894,7 +1226,7 @@ async def main():
 
         logger.info("📡 Discovery active until all devices provide initial data")
 
-        logger.info("ℹ️ Initial connection in progress (may take up to 5 minutes)")
+        logger.info("ℹ️ Initializing WebIF and detecting available devices (may take up to 5 minutes)")
 
         resp, _ = await safe_request(session, "GET", "/index.html")
 
@@ -927,7 +1259,6 @@ async def main():
                     logger.error("🔍 Please check:")
                     logger.error("   • Username")
                     logger.error("   • Password")
-                    logger.error("   • HEX code")
                     logger.error("   • Web interface settings")
 
                 await asyncio.sleep(10)
@@ -938,6 +1269,29 @@ async def main():
             await asyncio.sleep(5.0)
 
             session_broken = False
+
+            if not dynamic_urls_ready:
+
+                # Profimodus fast-check with WP-Fast-Check-style handling
+                overview = await detect_webif_overview_fast_check(session)
+
+                if overview is None:
+                    session_broken = True
+                    continue
+
+                # Detect final WebIF data URLs from the Info stack and apply them
+                detected_data_urls = await detect_webif_data_urls_fast_check(session, overview)
+
+                if detected_data_urls is None:
+                    session_broken = True
+                    continue
+
+                if not apply_detected_data_urls(detected_data_urls):
+                    logger.error("🛑 Dynamic WebIF URL detection failed – app is shutting down")
+                    sys.exit(1)
+
+                data_store = {key: {} for key in URLS.keys()}
+                dynamic_urls_ready = True
             
             # ---------------------------
             # WP-FAST-CHECK (Heat pump fast check until first valid data)
