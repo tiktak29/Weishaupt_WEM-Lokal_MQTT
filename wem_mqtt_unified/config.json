@@ -2,7 +2,7 @@
   "name": "Weishaupt WEM-Lokal MQTT",
   "version": "1.1.0",
   "slug": "wem_mqtt_unified",
-  "description": "Local integration for the Weishaupt WEM web interface via MQTT. After updating to v1.1.0, existing v1.0.x users should uninstall and install the app once to remove obsolete configuration options. See the changelog for details",
+  "description": "Local integration for the Weishaupt WEM web interface via MQTT. After updating to v1.1.0, existing v1.0.x users should uninstall and reinstall the app once to remove obsolete configuration options. See the changelog for details",
   "url": "https://github.com/tiktak29/Weishaupt_WEM-Lokal_MQTT",
   "startup": "services",
   "boot": "auto",
