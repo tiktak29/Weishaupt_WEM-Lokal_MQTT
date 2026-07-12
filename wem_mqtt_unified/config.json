@@ -1,51 +1,32 @@
 {
   "name": "Weishaupt WEM-Lokal MQTT",
-  "version": "1.0.2",
+  "version": "1.1.0",
   "slug": "wem_mqtt_unified",
-  "description": "Local integration for the Weishaupt WEM web interface via MQTT",
+  "description": "Local integration for the Weishaupt WEM web interface via MQTT. After updating to v1.1.0, existing v1.0.x users should uninstall and install the app once to remove obsolete configuration options. See the changelog for details",
   "url": "https://github.com/tiktak29/Weishaupt_WEM-Lokal_MQTT",
   "startup": "services",
   "boot": "auto",
   "host_network": false,
-
   "options": {
     "webinterface_ip_address": null,
     "webinterface_username": null,
     "webinterface_password": null,
-    "webinterface_hex_code": null,
-
     "mqtt_broker": "core-mosquitto",
     "mqtt_port": 1883,
     "mqtt_username": "mqtt_client",
     "mqtt_password": "",
-
-    "enable_hk1": true,
-    "enable_hk2": true,
-    "enable_stats": true,
-    "enable_wez2": true,
-
     "polling_seconds": 10
   },
-
   "schema": {
     "webinterface_ip_address": "str",
     "webinterface_username": "str",
     "webinterface_password": "password",
-    "webinterface_hex_code": "str",
-
     "mqtt_broker": "str",
     "mqtt_port": "int(1,65535)",
     "mqtt_username": "str",
     "mqtt_password": "password",
-
-    "enable_hk1": "bool",
-    "enable_hk2": "bool",
-    "enable_stats": "bool",
-    "enable_wez2": "bool",
-
     "polling_seconds": "list(10|15|20|25|30|35|40|45|50|55|60)"
   },
-
   "arch": [
     "aarch64",
     "amd64",
