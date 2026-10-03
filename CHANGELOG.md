@@ -1,5 +1,50 @@
 # Changelog
 
+## v1.1.1 – Persistent WebIF Sessions & Recovery
+
+### Upgrade notes
+
+* Update normally from v1.1.0. Configuration options and schema are unchanged; no uninstall or reconfiguration is required for this update.
+* The first start after updating from v1.1.0 uses the fresh-login path because that version did not persist session cookies. Later restarts and updates can reuse the validated saved session.
+* Keep the app's data to retain the saved session. Legacy v1.0.x configuration cleanup is described separately in the README.
+
+### Changes
+
+* **Persistent validated WebIF sessions**
+  * Save a session cookie only after protected-page validation
+  * Validate the saved session at startup before creating a new login
+  * Continue without a new login when the saved session is accepted
+  * Retain the saved cookie during transport errors; use the fresh-login path after an explicit login-page rejection
+  * Distinguish fresh-session setup and saved-session validation in the public log
+
+* **Session-preserving runtime recovery**
+  * Revalidate the existing session before attempting a controlled replacement login
+  * Handle transport interruptions separately from session rejection
+  * Use 15-minute recovery pauses for the first four checks, then 30-minute pauses
+  * Rate-limit replacement logins during long recovery
+  * Resume polling after successful in-process recovery
+
+* **Daily WebIF rest**
+  * Add a 90-second request-free pause after the daily statistics are generated
+  * Recreate the HTTP client while preserving the WebIF session cookie
+
+* **Home Assistant diagnostics and public logging**
+  * Add the WebIF-Status diagnostic sensor for connection and recovery states
+  * Classify system status, last update and daily success sensors as diagnostic entities
+  * Use compact startup, recovery, shutdown and daily statistics messages
+  * Remove the duplicate startup banner from `run.sh`; the Python startup message includes the app version
+
+* **Documentation and release metadata**
+  * Document both startup paths, saved-session handling and daily rest
+  * Mark older log screenshots as v1.1.0 examples
+  * Align public version labels to v1.1.1
+
+### Notes
+
+The automatic device support, Round-Robin sequence builder, value parser, value normalization and existing sensor identifiers are retained.
+Session reuse has been tested with Stop → Start, a normal Home Assistant app update, and a temporarily disabled Webserver that subsequently accepted the same saved cookie.
+Example validation times are observations, not performance guarantees. Saved-session timing checks run between HTTP requests, so an in-flight request can delay the configured startup deadline.
+
 ## v1.1.0 – Fully Automatic WebIF Detection
 
 > ⚠️ **Important upgrade note**
