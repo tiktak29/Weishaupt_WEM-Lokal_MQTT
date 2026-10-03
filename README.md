@@ -1,6 +1,6 @@
 # Weishaupt WEM-Lokal MQTT
 
-![Version](https://img.shields.io/badge/version-v1.1.0-blue)
+![Version](https://img.shields.io/badge/version-v1.1.1-blue)
 ![Home Assistant](https://img.shields.io/badge/Home%20Assistant-App-green)
 ![MQTT](https://img.shields.io/badge/MQTT-Discovery-orange)
 ![License](https://img.shields.io/badge/license-MIT-brightgreen)
@@ -11,27 +11,21 @@ Local data extraction from Weishaupt heat pumps via the integrated Weishaupt WEM
 
 ---
 
-> ⚠️ **Important for existing users upgrading to v1.1.0**
+> ℹ️ **Updating from v1.1.0 to v1.1.1**
 >
-> Version 1.1.0 introduces a simplified configuration and fully automatic WebIF detection.
+> The configuration options and schema are unchanged. Use the normal Home Assistant app update; no uninstall or reconfiguration is required for this update.
 >
-> The app (formerly add-on) no longer requires:
+> The first start after updating from v1.1.0 establishes and validates a new WebIF session because v1.1.0 did not save session cookies. Subsequent restarts and updates can reuse the saved session after validation.
 >
-> * a manually configured HEX code
-> * manually enabled heating circuit options
-> * manually enabled statistics or 2. WEZ options
+> Keep the app's data when updating. Uninstalling removes the saved session and requires a fresh login on the next installation.
+
+> ⚠️ **Legacy migration from v1.0.x**
 >
-> At startup, the app now automatically detects the available WebIF data URLs and all supported devices.
+> Version 1.1.0 introduced fully automatic WebIF detection and removed the manual HEX code and device-enable options.
 >
-> A direct update from v1.0.x to v1.1.0 is supported and the app should continue to run normally.
+> Obsolete v1.0.x options may remain stored and generate Supervisor warnings. If these old options are still present, note your WebIF and MQTT settings before uninstalling and reinstalling the current app to remove them.
 >
-> However, obsolete configuration options from v1.0.x remain stored internally and may generate Supervisor warnings.
->
-> **For a clean migration, update to v1.1.0 first, then uninstall the app once and install it again.**
->
-> The v1.1.0 app remains available in the Home Assistant App Store, so it does not need to be downloaded again.
->
-> After reinstalling, only the WebIF access data and MQTT settings need to be configured.
+> This legacy cleanup does not apply to a normal v1.1.0 → v1.1.1 update.
 
 ---
 
@@ -101,7 +95,7 @@ Keep these credentials safe. They are required later in the app configuration:
 
 This Home Assistant app (formerly add-on) acts as a local polling gateway for the Weishaupt WEM-Lokal WebIF.
 
-It logs in to the local WebIF, automatically detects the available WebIF data URLs and publishes the collected data to Home Assistant via MQTT Discovery.
+It validates a saved WebIF session or establishes a new one, automatically detects the available WebIF data URLs and publishes the collected data to Home Assistant via MQTT Discovery.
 
 All supported devices and sensors are created automatically in Home Assistant.
 
@@ -148,28 +142,25 @@ Only detected devices are created in Home Assistant and included in the polling 
 * Separate Home Assistant devices for the heat pump, heating circuits, statistics and 2. WEZ
 * Availability topic and system status monitoring
 * Last update timestamp sensor
+* WebIF status diagnostic sensor for connection and recovery states
 
 ### Reliability
 
-* Automatic login handling
-* Session detection and re-authentication
-* Automatic WebIF recovery after session expiration
-* Robust HTTP error handling
-* Retry handling during initial synchronization
+* Automatic login handling with protected-page session validation
+* Persistent storage of validated WebIF sessions for reuse after restarts and updates
+* Existing-session validation before a replacement login
+* Separate handling of transport interruptions and rejected sessions
+* Recovery pauses with checks after 15 minutes for the first four attempts, then after 30 minutes
+* Robust HTTP error handling and retry handling during initial synchronization
 * Round-robin polling
-* Daily communication statistics
+* Daily communication statistics and a 90-second WebIF rest with the session cookie preserved
 
 ### Communication quality monitoring
 
-The app tracks the quality of the local WebIF communication.
-Daily statistics are published to Home Assistant and written to the app log.
+The app tracks first-pass successes, retry successes and failed polls internally.
+The public app log reports a compact daily summary with the overall success rate, successful polls, total polls and failed polls.
 
-Tracked values:
-
-* First-pass success rate
-* Retry-pass success rate
-* Failed requests
-* Overall daily success rate
+The previous day's overall success rate and counts are also published to Home Assistant via MQTT and saved for display after an app restart.
 
 ---
 
@@ -214,21 +205,17 @@ https://github.com/tiktak29/Weishaupt_WEM-Lokal_MQTT
 
 ### 3. Verify successful startup
 
-During startup, the app should automatically detect the local WebIF structure and the available devices.
+During startup, the app validates the WebIF session and automatically detects the available devices.
 
-A successful startup includes log messages similar to:
+A successful startup includes messages similar to:
 
 ```text
-✅ WebIF overview detection completed
-✅ WebIF data URL detection completed
-✅ Using dynamically detected WebIF data URLs
-🔍 Detected WebIF data URLs:
-📋 Active WebIF devices:
-🔄 Initial sync completed – switching to Round Robin polling
-ℹ️ All devices provided initial data – discovery disabled
+✅ WebIF devices detected: Wärmepumpe, Heizkreis 1, Heizkreis 2, Statistik, 2. WEZ
+✅ Initial sync completed – Round Robin active
 ```
 
-After the initial sync is completed, the detected devices and sensors should appear automatically in Home Assistant via MQTT Discovery.
+The preceding session messages depend on whether a saved session is available; both normal paths are shown in [Startup Log](#startup-log).
+The device list adapts to the connected system. Detected devices and sensors appear automatically in Home Assistant via MQTT Discovery as their initial data becomes available.
 
 ---
 
@@ -259,108 +246,109 @@ The WebIF structure, data URLs and available devices are detected automatically 
 
 ## Startup Log
 
-During startup, the app logs in to the local WebIF, detects the available WebIF structure and creates the active polling configuration automatically.
+There are two normal startup paths. The examples below omit the timestamp and logger prefix for readability.
+The measured times are real test examples, not guaranteed startup durations.
 
-A successful startup looks similar to this:
+### First installation / no saved session
+
+When no usable saved session is available, the app establishes a new login and validates it on a protected WebIF page:
 
 ```text
-🚀 Starting Weishaupt Web-Interface polling...
+🚀 Starting Weishaupt WEM-Lokal MQTT v1.1.1
 ✔️ MQTT connected
-📡 Discovery active until all devices provide initial data
-ℹ️ Initializing WebIF and detecting available devices (may take up to 5 minutes)
-
-✅ WebIF overview detection completed
-✅ WebIF data URL detection completed
-✅ Using dynamically detected WebIF data URLs
-
-🔍 Detected WebIF data URLs:
-   • Wärmepumpe   : /settings_export.html?stack=...
-   • Heizkreis 1  : /settings_export.html?stack=...
-   • Heizkreis 2  : /settings_export.html?stack=...
-   • Statistik    : /settings_export.html?stack=...
-   • 2. WEZ       : /settings_export.html?stack=...
-
-📋 Active WebIF devices:
-   • Wärmepumpe
-   • Heizkreis 1
-   • Heizkreis 2
-   • Statistik
-   • 2. WEZ
-
-✅ Wärmepumpe   → Initial data received
-✅ Heizkreis 1  → Initial data received
-✅ Heizkreis 2  → Initial data received
-✅ Statistik    → Initial data received
-✅ 2. WEZ       → Initial data received
-
-🔄 Initial sync completed – switching to Round Robin polling
-ℹ️ All devices provided initial data – discovery disabled
-📋 Summary of all devices:
-⚙️ Weishaupt WAB 14
-🟢 Wärmepumpe
-🟢 Heizkreis 1
-🟢 Heizkreis 2
-🟢 Statistik
-🟢 2. WEZ
-🕒 Daily polling statistics will be generated at 00:00
+ℹ️ Establishing WebIF session – this may take up to 5 minutes
+✅ WebIF session validated in 6.4 s
+✅ WebIF devices detected: Wärmepumpe, Heizkreis 1, Heizkreis 2, Statistik, 2. WEZ
+✅ Initial sync completed – Round Robin active
 ```
 
-The detected devices automatically adapt to the connected Weishaupt system configuration.
+Only a session cookie that has passed protected-page validation is saved in `/data/webif_session.json`.
+This path also applies to the first update from v1.1.0, which did not persist session cookies.
 
-For example, systems without HK2, HK3, HK4, statistics or 2. WEZ will only show the devices that are actually available.
+If setup is still incomplete when the 120-second threshold is checked, the app logs this once:
+
+```text
+⚠️ WebIF session setup is taking longer than expected – continuing for up to 5 minutes
+```
+
+A longer successful validation may report `✅ WebIF session validated in 131.8 s`.
+If setup fails within the configured five-minute window, the app logs:
+
+```text
+❌ WebIF session could not be established within 5 minutes
+```
+
+### Restart / update with a saved session
+
+The app loads the saved session and validates it on a protected WebIF page before considering a new login:
+
+```text
+🚀 Starting Weishaupt WEM-Lokal MQTT v1.1.1
+✔️ MQTT connected
+ℹ️ Checking existing WebIF session
+✅ Existing WebIF session validated in 0.8 s
+✅ WebIF devices detected: Wärmepumpe, Heizkreis 1, Heizkreis 2, Statistik, 2. WEZ
+✅ Initial sync completed – Round Robin active
+```
+
+If the saved session is accepted, no new WebIF login is performed. This avoids unnecessary new logins and session cookies during app restarts and updates.
+Session reuse has been tested with Stop → Start and a normal Home Assistant app update.
+
+### Saved session while the WebIF is temporarily unreachable
+
+A transport error does not prove that the saved cookie is invalid. The app keeps the cookie and retries validation without creating a new login.
+In a real test with the Webserver initially switched off, the same cookie was accepted after the Webserver was switched on again:
+
+```text
+✅ Existing WebIF session validated in 42.2 s
+```
+
+If validation is still pending when the 120-second threshold is checked, the app logs this once:
+
+```text
+⚠️ Existing WebIF session could not yet be validated – continuing for up to 5 minutes
+```
+
+If the configured five-minute validation window expires, the app logs:
+
+```text
+❌ Existing WebIF session could not be validated within 5 minutes – saved session retained
+```
+
+The saved cookie is retained and this startup attempt ends. The startup timeout does not enter the runtime recovery loop.
+For saved-session validation, timing thresholds are checked between HTTP requests; an in-flight request can delay the warning or the end of the window.
+
+### Saved session explicitly rejected
+
+If the protected WebIF page returns the login page, the app discards the rejected saved cookie and uses the normal fresh-login path:
+
+```text
+ℹ️ Existing WebIF session rejected – establishing a new WebIF session
+ℹ️ Establishing WebIF session – this may take up to 5 minutes
+```
+
+After successful validation, the new cookie is saved again.
+
+Device detection, initial synchronization, Round Robin, retries, runtime session revalidation, transport recovery and the daily WebIF rest follow their existing runtime paths after startup.
+The detected devices adapt to the connected system; unavailable optional devices are omitted.
 
 ---
 
 ## Daily Statistics
 
 The app tracks the communication quality of the local WebIF polling during operation.
+During normal polling, the first day-change check after midnight generates the previous day's summary.
 
-Once per day at midnight, the app generates a daily statistics summary for the previous day.
-
-Example:
+Illustrative public-log example:
 
 ```text
-🕒 Creating daily statistics for Tue, 2026-06-30
- Wärmepumpe:
-  First-pass success rate:  90.1 % (3092)
-  Retry-pass success rate:   8.6 % (295)
-  Overall failure rate:      1.3 % (46)
-  Overall success rate:     98.7 % (3387/3433)
-
- Heizkreis 1:
-  First-pass success rate:  91.6 % (899)
-  Retry-pass success rate:   7.3 % (72)
-  Overall failure rate:      1.0 % (10)
-  Overall success rate:     99.0 % (971/981)
-
- Heizkreis 2:
-  First-pass success rate:  91.0 % (892)
-  Retry-pass success rate:   7.6 % (74)
-  Overall failure rate:      1.4 % (14)
-  Overall success rate:     98.6 % (966/980)
-
- Statistik:
-  First-pass success rate:  91.4 % (897)
-  Retry-pass success rate:   6.9 % (68)
-  Overall failure rate:      1.6 % (16)
-  Overall success rate:     98.4 % (965/981)
-
- 2. WEZ:
-  First-pass success rate:  91.2 % (448)
-  Retry-pass success rate:   7.9 % (39)
-  Overall failure rate:      0.8 % (4)
-  Overall success rate:     99.2 % (487/491)
-
- Overall system:
-  First-pass success rate:  90.7 % (6228)
-  Retry-pass success rate:   8.0 % (548)
-  Overall failure rate:      1.3 % (90)
-  Overall success rate:     98.7 % (6776/6866)
-
-🕒 Daily statistics generated for Tue, 2026-06-30
+🕒 [2026-06-30] Daily statistics – 98.7% successful (6776/6866 polls, 90 failed)
+✅ [2026-06-30] Daily WebIF rest completed – 90 s, session preserved
 ```
 
-The daily success rate is also published to Home Assistant via MQTT.
+The daily success rate and totals are also published to Home Assistant via MQTT.
+After the statistics are generated, the app pauses WebIF requests for 90 seconds and recreates the HTTP client while preserving the WebIF session cookie. Polling then resumes without a login caused by the rest itself.
+This scheduled pause is expected and is not a WebIF outage.
 
 ---
 
@@ -375,7 +363,12 @@ If you need to access the WebIF manually:
 * stop the app first, or
 * log out from the WebIF properly before starting the app again.
 
-In rare cases, an unstable WebIF session may require restarting the Weishaupt controller.
+During runtime, a session problem first triggers validation of the existing cookie. Transport interruptions are handled separately and do not by themselves invalidate it.
+If immediate recovery fails, the app enters recovery mode: the first four checks follow 15-minute pauses, with 30-minute pauses thereafter. The app first tries the existing session; replacement logins in long recovery are rate-limited.
+
+The **WebIF-Status** diagnostic sensor shows connection and recovery states. The app marks MQTT availability offline during long recovery and restores it after successful recovery.
+
+If the WebIF remains unavailable, the app log advises restarting only the **Webserver** function in the Weishaupt controller: set Webserver to OFF, wait 60 seconds, then set it to ON.
 
 ### ✅ Cloud access unaffected
 
@@ -417,7 +410,7 @@ The following dashboard shows an example of automatically detected Weishaupt WEM
 
 ### Example Startup Log
 
-The startup log shows the automatic WebIF detection, device discovery and successful initialization.
+The following screenshots show the earlier v1.1.0 log format. For the current v1.1.1 public log and both startup paths, see [Startup Log](#startup-log).
 
 ![Startup Log](images/startup-log-1.jpg)
 ![Startup Log](images/startup-log-2.jpg)
@@ -426,7 +419,7 @@ The startup log shows the automatic WebIF detection, device discovery and succes
 
 ### Example Daily Statistics
 
-The app automatically generates daily communication statistics at midnight, providing an overview of polling quality and overall communication reliability.
+The following screenshot shows the earlier detailed v1.1.0 log format. The current v1.1.1 summary and daily rest message are shown in [Daily Statistics](#daily-statistics).
 
 ![Daily Statistics](images/daily-statistics-log.jpg)
 
