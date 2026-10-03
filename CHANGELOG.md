@@ -36,7 +36,6 @@
 
 * **Documentation and release metadata**
   * Document both startup paths, saved-session handling and daily rest
-  * Mark older log screenshots as v1.1.0 examples
   * Align public version labels to v1.1.1
 
 ### Notes
