@@ -257,7 +257,7 @@ When no usable saved session is available, the app establishes a new login and v
 🚀 Starting Weishaupt WEM-Lokal MQTT v1.1.1
 ✔️ MQTT connected
 ℹ️ Establishing WebIF session – this may take up to 5 minutes
-✅ WebIF session validated in 6.4 s
+✅ WebIF session validated in 60.4 s
 ✅ WebIF devices detected: Wärmepumpe, Heizkreis 1, Heizkreis 2, Statistik, 2. WEZ
 ✅ Initial sync completed – Round Robin active
 ```
