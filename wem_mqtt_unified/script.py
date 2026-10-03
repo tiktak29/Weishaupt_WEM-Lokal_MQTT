@@ -4,12 +4,15 @@ from aiohttp import ClientConnectorError
 from bs4 import BeautifulSoup
 from urllib.parse import urlencode
 import json
+import os
 import time
 import sys
 import paho.mqtt.client as mqtt
 import unicodedata
 import logging
+import signal
 from datetime import datetime, timezone
+from yarl import URL
 initial_sync_done = False
 INITIAL_SYNC_ORDER = [
     "Heizkreis 1",
@@ -24,11 +27,93 @@ INITIAL_SYNC_RETRIES = 2
 INITIAL_SYNC_RETRY_DELAY = 2
 login_fail_count = 0
 
+# Conservative WebIF timing / session-preservation test parameters
+NORMAL_RETRY_DELAY_SECONDS = 10.0
+STARTUP_AUTH_VALIDATION_DELAY_SECONDS = 5.0
+STARTUP_AUTH_TARGET_SECONDS = 120.0
+STARTUP_AUTH_MAX_SECONDS = 300.0
+SAME_COOKIE_REVALIDATION_DELAY_SECONDS = 15.0
+SAME_COOKIE_REVALIDATION_ATTEMPTS = 3
+DAILY_WEBIF_REST_SECONDS = 90.0
+TRANSPORT_CONFIRMATION_DELAY_SECONDS = 10.0
+
+# Explicit protected-page / control-flow results.
+WEBIF_PAGE_VALID = "valid"
+WEBIF_PAGE_EMPTY = "empty"
+WEBIF_PAGE_LOGIN = "login_page"
+WEBIF_PAGE_TRANSPORT = "transport_error"
+
+SESSION_REVALIDATION_ACCEPTED = "accepted"
+SESSION_REVALIDATION_REJECTED = "rejected"
+SESSION_REVALIDATION_TRANSPORT = "transport_error"
+
+FETCH_CONTROL_NONE = "none"
+FETCH_CONTROL_TRANSPORT = "transport"
+FETCH_CONTROL_SESSION = "session_suspected"
+last_fetch_control = FETCH_CONTROL_NONE
+
+# Isolated WebIF outage protection (v1.1.1)
+WEBIF_UNREACHABLE_CONFIRMATIONS = 5
+WEBIF_RECOVERY_SHORT_ATTEMPTS = 4
+WEBIF_RECOVERY_SHORT_PAUSE = 900
+WEBIF_RECOVERY_LONG_PAUSE = 1800
+
+LOGIN_RESULT_SUCCESS = "success"
+LOGIN_RESULT_INDEX_UNREACHABLE = "index_unreachable"
+LOGIN_RESULT_REQUEST_FAILED = "login_request_failed"
+LOGIN_RESULT_REJECTED = "login_rejected"
+
+last_login_result = None
+last_login_index_status = None
+last_login_post_status = None
+last_webif_error = None
+current_availability = "online"
+
 # ---------------------------
 # DEBUG
 # ---------------------------
 
 DEBUG_WEBIF = False
+
+# ---------------------------
+# FUNCTIONAL RECOVERY STATE / LOG HELPERS
+# ---------------------------
+
+# Functional state: this timestamp gates the 30-minute replacement-login
+# cooldown in the runtime recovery path.
+last_replacement_login_monotonic = None
+last_control_reason = None
+
+
+def get_session_cookie(session):
+    try:
+        cookies = session.cookie_jar.filter_cookies(URL(BASE_URL))
+        morsel = cookies.get("session")
+        return morsel.value if morsel is not None else None
+    except Exception:
+        return None
+
+
+def cookie_transition(before, after):
+    if before is None and after is not None:
+        return "created"
+    if before is not None and after is None:
+        return "missing"
+    if before is not None and after is not None and before != after:
+        return "changed"
+    if before is not None and after is not None and before == after:
+        return "unchanged"
+    return "absent"
+
+
+def log_startup_anomaly(stage, reason, causes_session_renewal=False):
+    global last_control_reason
+    if causes_session_renewal:
+        last_control_reason = f"{stage}: {reason}"
+
+
+def signal_handler(signum, frame):
+    raise SystemExit(0)
 
 # ---------------------------
 # GLOBALS
@@ -43,25 +128,7 @@ def all_devices_ready():
     return all(device_ready.values())
 
 def log_device_ready(name):
-    logger.info(f"✅ {name:<12} → Initial data received")
-
-def log_summary_after_discovery(data_store):
-    logger.info("📋 Summary of all devices:")
-
-    wp_model = (
-        data_store.get("Wärmepumpe", {})
-        .get("Außengerät Variante", "")
-        .strip()
-    )
-
-    if wp_model:
-        logger.info(f"⚙️ Weishaupt {wp_model}")
-
-    for name, ready in device_ready.items():
-        if ready:
-            logger.info(f"🟢 {name}")
-        else:
-            logger.info(f"🔴 {name}")
+    logger.info(f"✅ Initial data received: {name}")
 
 # ---------------------------
 # CONFIGURATION
@@ -176,6 +243,7 @@ DAILY_SUCCESS_TOPIC = "wem/daily_success"
 DAILY_SUCCESS_ATTR_TOPIC = "wem/daily_success_attributes"
 OFFLINE_TIMEOUT = 300
 STATS_FILE = "/data/daily_success.json"
+SESSION_STATE_FILE = "/data/webif_session.json"
 
 logging.basicConfig(
     level=logging.INFO,
@@ -183,6 +251,11 @@ logging.basicConfig(
     datefmt="%Y-%m-%d %H:%M:%S"
 )
 logger = logging.getLogger("wem_mqtt_unified")
+logger.info("🚀 Starting Weishaupt WEM-Lokal MQTT v1.1.1")
+try:
+    signal.signal(signal.SIGTERM, signal_handler)
+except Exception:
+    pass
 
 # ---------------------------
 # HYBRID CALLBACKS (API v1 + API v2)
@@ -196,19 +269,15 @@ def on_connect(client, userdata, flags, rc, properties=None):
     """
     if rc == 0:
         logger.info("✔️ MQTT connected")
-        client.publish(AVAILABILITY_TOPIC, "online", qos=1, retain=True)
-    else:
-        logger.error(f"❌  MQTT connection failed (rc={rc})")
+        client.publish(AVAILABILITY_TOPIC, current_availability, qos=1, retain=True)
 
 def on_disconnect(client, userdata, rc=None, properties=None, *args):
     """
     Compatible with both paho-mqtt callback API variants.
     Some versions pass an additional reason/properties argument on disconnect.
     """
-    if rc == 0:
-        logger.info("🔌 MQTT disconnected cleanly")
-    else:
-        logger.warning(f"⚠️ MQTT disconnected unexpectedly (rc={rc})")
+    if rc != 0:
+        logger.warning("⚠️ MQTT connection lost – reconnecting")
 
 # ---------------------------
 # MQTT client with fallback for older paho-mqtt versions
@@ -238,16 +307,10 @@ mqtt_client.will_set(
 
 try:
     mqtt_client.connect(MQTT_BROKER, MQTT_PORT, 60)
-except Exception as e:
-    logger.error("❌ MQTT connection failed – unable to connect to MQTT broker")
-    logger.error(f"🔧 Technical info: {e}")
-    logger.error("🔍 Please check:")
-    logger.error("   • MQTT broker address")
-    logger.error("   • MQTT port")
-    logger.error("   • Whether the MQTT broker is running")
-    logger.error("   • MQTT username and password")
-    logger.error("🛑 App is shutting down")
-    
+except Exception:
+    logger.error("❌ MQTT connection failed – check broker address, port and availability")
+    logger.error("🛑 WEM-Lokal MQTT stopped")
+
     mqtt_client.loop_stop()
     sys.exit(1)
 
@@ -264,15 +327,10 @@ while time.time() - mqtt_check_start < 3:
     time.sleep(0.1)
 
 if not mqtt_login_ok:
-    logger.error("❌ MQTT login failed – broker rejected authentication")
-    logger.error("🔧 Authentication was rejected by the MQTT broker")
-    logger.error("🔍 Please check:")
-    logger.error("   • MQTT username")
-    logger.error("   • MQTT password")
-    logger.error("   • MQTT access rights")
+    logger.error("❌ MQTT authentication failed – check username, password and permissions")
     mqtt_client.loop_stop()
     mqtt_client.disconnect()
-    logger.error("🛑 App is shutting down.")
+    logger.error("🛑 WEM-Lokal MQTT stopped")
     sys.exit(1)
 
 def mqtt_publish(topic, payload, retain=True):
@@ -293,10 +351,83 @@ def save_daily_stats(data):
     try:
         with open(STATS_FILE, "w") as f:
             json.dump(data, f)
-    except Exception as e:
+    except Exception:
         logger.warning(
-            f"⚠️ Unable to save daily statistics: {e}"
+            "⚠️ Daily statistics could not be saved – values may be lost after restart"
         )
+
+
+def load_persisted_session_cookie(session):
+    """Load a previously protected-page-validated WEM session into this process."""
+    try:
+        with open(SESSION_STATE_FILE, "r") as f:
+            data = json.load(f)
+
+        if data.get("schema") != 1:
+            return False
+        if data.get("base_url") != BASE_URL:
+            return False
+        if data.get("username") != USERNAME:
+            return False
+
+        cookie = data.get("session")
+        if not isinstance(cookie, str) or not cookie:
+            return False
+
+        session.cookie_jar.update_cookies(
+            {"session": cookie},
+            response_url=URL(BASE_URL),
+        )
+        return True
+
+    except FileNotFoundError:
+        return False
+    except Exception:
+        return False
+
+
+def save_validated_session_cookie(session):
+    """Persist only a session cookie that has already passed protected validation."""
+    cookie = get_session_cookie(session)
+    if not cookie:
+        return False
+
+    temporary_file = SESSION_STATE_FILE + ".tmp"
+    data = {
+        "schema": 1,
+        "base_url": BASE_URL,
+        "username": USERNAME,
+        "session": cookie,
+    }
+
+    try:
+        with open(temporary_file, "w") as f:
+            json.dump(data, f)
+        try:
+            os.chmod(temporary_file, 0o600)
+        except Exception:
+            pass
+        os.replace(temporary_file, SESSION_STATE_FILE)
+        return True
+    except Exception:
+        try:
+            os.remove(temporary_file)
+        except Exception:
+            pass
+        logger.warning(
+            "⚠️ Validated WebIF session could not be saved – next restart may require a new login"
+        )
+        return False
+
+
+def clear_persisted_session_cookie():
+    """Remove a session only after the WebIF has explicitly rejected it."""
+    try:
+        os.remove(SESSION_STATE_FILE)
+    except FileNotFoundError:
+        pass
+    except Exception:
+        pass
 
 # ---------------------------
 # HELPER FUNCTIONS
@@ -360,9 +491,29 @@ def is_wrong_section(section, values):
                 return True
     return False
 
+def is_login_page(html):
+    if not isinstance(html, str):
+        return False
+    html_lower = html.lower()
+    return "form-signin" in html_lower or "bitte anmelden" in html_lower
+
 # ---------------------------
 # ROBUST HTTP WRAPPING
 # ---------------------------
+
+def record_webif_error(method, url, error_type, details):
+    """Store the last WebIF request error for the recovery log."""
+    global last_webif_error
+
+    last_webif_error = {
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "method": method,
+        "url": url,
+        "error_type": error_type,
+        "details": details,
+    }
+
+
 
 async def safe_request(session, method, url, **kwargs):
     try:
@@ -370,32 +521,37 @@ async def safe_request(session, method, url, **kwargs):
             text = await resp.text()
             return resp, text
 
-    except ClientConnectorError:
-        if url != "/index.html":
-            logger.error(f"❌ Connection error to WEM-Local ({url})")
+    except ClientConnectorError as e:
+        record_webif_error(method, url, type(e).__name__, str(e).strip() or repr(e))
         return None, None
 
-    except asyncio.TimeoutError:
-        if url != "/index.html":
-            logger.error(f"❌ Timeout during request to WEM-Local ({url})")
+    except asyncio.TimeoutError as e:
+        record_webif_error(method, url, type(e).__name__, str(e).strip() or repr(e))
         return None, None
 
     except Exception as e:
-        if url != "/index.html":
-            logger.error(f"❌ Unexpected error during request ({url}): {e}")
+        record_webif_error(method, url, type(e).__name__, str(e).strip() or repr(e))
         return None, None
+
 
 # ---------------------------
 # LOGIN
 # ---------------------------
 
 async def login(session):
+    global last_login_result
+    global last_login_index_status
+    global last_login_post_status
+
+    last_login_index_status = None
+    last_login_post_status = None
 
     resp, _ = await safe_request(session, "GET", "/index.html")
     if resp is None:
-        logger.warning("⚠️ /index.html not reachable – login aborted")
+        last_login_result = LOGIN_RESULT_INDEX_UNREACHABLE
         return False
 
+    last_login_index_status = resp.status
     payload = urlencode({"user": USERNAME, "pass": PASSWORD})
 
     resp, _ = await safe_request(
@@ -408,30 +564,471 @@ async def login(session):
     )
 
     if resp is None:
-        logger.warning(
-            "⚠️ Login request failed (no response from web interface)"
-        )
+        last_login_result = LOGIN_RESULT_REQUEST_FAILED
         return False
 
-    return resp.status == 303
+    last_login_post_status = resp.status
+    login_ok = resp.status == 303
 
+    if login_ok:
+        last_login_result = LOGIN_RESULT_SUCCESS
+    else:
+        last_login_result = LOGIN_RESULT_REJECTED
+        record_webif_error(
+            "POST",
+            "/login.html",
+            f"HTTP {resp.status}",
+            "Login response did not contain the expected HTTP 303 status",
+        )
+
+    return login_ok
+
+
+async def check_webif_index_reachability(session, context, attempt=None):
+    """Functional reachability check using the existing main session/cookie."""
+    resp, html = await safe_request(session, "GET", "/index.html")
+    return (resp is not None and html is not None), None
+
+
+async def startup_authenticate_fast(session):
+    """Acquire the first validated WebIF session within a bounded startup window."""
+    global login_fail_count
+
+    started = time.monotonic()
+    attempt = 0
+    target_notice_emitted = False
+
+    def emit_target_notice_if_needed(elapsed_seconds):
+        nonlocal target_notice_emitted
+        if elapsed_seconds >= STARTUP_AUTH_TARGET_SECONDS and not target_notice_emitted:
+            target_notice_emitted = True
+            logger.warning(
+                "⚠️ WebIF session setup is taking longer than expected – continuing for up to 5 minutes"
+            )
+
+    def fail_startup(reason):
+        elapsed_seconds = time.monotonic() - started
+        emit_target_notice_if_needed(elapsed_seconds)
+        logger.error("❌ WebIF session could not be established within 5 minutes")
+        return SESSION_REVALIDATION_REJECTED, None, None
+
+    while True:
+        elapsed_before = time.monotonic() - started
+        emit_target_notice_if_needed(elapsed_before)
+        if elapsed_before >= STARTUP_AUTH_MAX_SECONDS:
+            return fail_startup("maximum_startup_authentication_time_exceeded")
+
+        attempt += 1
+        cookie_before = get_session_cookie(session)
+        login_started = time.monotonic()
+        remaining = STARTUP_AUTH_MAX_SECONDS - (login_started - started)
+
+        try:
+            login_ok = await asyncio.wait_for(login(session), timeout=max(0.001, remaining))
+        except asyncio.TimeoutError:
+            return fail_startup("startup_login_operation_exceeded_absolute_window")
+
+        login_duration = time.monotonic() - login_started
+        cookie_after = get_session_cookie(session)
+        login_cookie_transition = cookie_transition(cookie_before, cookie_after)
+
+        if not login_ok:
+            login_fail_count += 1
+            elapsed = time.monotonic() - started
+            emit_target_notice_if_needed(elapsed)
+
+            remaining = STARTUP_AUTH_MAX_SECONDS - (time.monotonic() - started)
+            if remaining <= 0:
+                continue
+            retry_sleep = min(10.0, remaining)
+            await asyncio.sleep(retry_sleep)
+            continue
+
+        login_fail_count = 0
+        elapsed = time.monotonic() - started
+        emit_target_notice_if_needed(elapsed)
+        remaining = STARTUP_AUTH_MAX_SECONDS - elapsed
+        if remaining < STARTUP_AUTH_VALIDATION_DELAY_SECONDS:
+            return fail_startup("insufficient_time_for_required_startup_validation_grace")
+
+        await asyncio.sleep(STARTUP_AUTH_VALIDATION_DELAY_SECONDS)
+
+        remaining = STARTUP_AUTH_MAX_SECONDS - (time.monotonic() - started)
+        if remaining <= 0:
+            return fail_startup("maximum_startup_authentication_time_exceeded_before_validation")
+
+        try:
+            page_result, overview, _ = await asyncio.wait_for(
+                detect_webif_overview(session, context_label="startup_fast_validation"),
+                timeout=max(0.001, remaining),
+            )
+        except asyncio.TimeoutError:
+            return fail_startup("startup_protected_validation_exceeded_absolute_window")
+
+        elapsed = time.monotonic() - started
+        emit_target_notice_if_needed(elapsed)
+
+        if page_result in (WEBIF_PAGE_VALID, WEBIF_PAGE_EMPTY):
+            logger.info(f"✅ WebIF session validated in {elapsed:.1f} s")
+            return SESSION_REVALIDATION_ACCEPTED, page_result, overview
+
+        if page_result == WEBIF_PAGE_TRANSPORT:
+            remaining = STARTUP_AUTH_MAX_SECONDS - elapsed
+            if remaining <= 0:
+                continue
+            await asyncio.sleep(min(10.0, remaining))
+            continue
+
+
+
+
+async def startup_validate_persisted_session(session):
+    """Validate a persisted WEM session without creating a replacement login.
+
+    Transport errors never delete the persisted cookie.  A fresh login is only
+    allowed after the protected WebIF explicitly returns the login page.
+    """
+    if not load_persisted_session_cookie(session):
+        return None, None, None
+
+    logger.info("ℹ️ Checking existing WebIF session")
+
+    started = time.monotonic()
+    target_notice_emitted = False
+
+    while True:
+        elapsed_before = time.monotonic() - started
+
+        if (
+            elapsed_before >= STARTUP_AUTH_TARGET_SECONDS
+            and not target_notice_emitted
+        ):
+            target_notice_emitted = True
+            logger.warning(
+                "⚠️ Existing WebIF session could not yet be validated – continuing for up to 5 minutes"
+            )
+
+        if elapsed_before >= STARTUP_AUTH_MAX_SECONDS:
+            logger.error(
+                "❌ Existing WebIF session could not be validated within 5 minutes – saved session retained"
+            )
+            return SESSION_REVALIDATION_TRANSPORT, None, None
+
+        page_result, overview, _ = await detect_webif_overview(
+            session,
+            context_label="startup_persisted_session",
+        )
+
+        elapsed = time.monotonic() - started
+
+        if page_result in (WEBIF_PAGE_VALID, WEBIF_PAGE_EMPTY):
+            save_validated_session_cookie(session)
+            logger.info(f"✅ Existing WebIF session validated in {elapsed:.1f} s")
+            return SESSION_REVALIDATION_ACCEPTED, page_result, overview
+
+        if page_result == WEBIF_PAGE_LOGIN:
+            clear_persisted_session_cookie()
+            session.cookie_jar.clear()
+            logger.info(
+                "ℹ️ Existing WebIF session rejected – establishing a new WebIF session"
+            )
+            return SESSION_REVALIDATION_REJECTED, page_result, None
+
+        remaining = STARTUP_AUTH_MAX_SECONDS - elapsed
+        if remaining <= 0:
+            continue
+
+        await asyncio.sleep(min(NORMAL_RETRY_DELAY_SECONDS, remaining))
+
+
+async def same_cookie_revalidate(session, context, trigger):
+    """Validate the existing cookie up to three times without creating a login."""
+    for attempt in range(1, SAME_COOKIE_REVALIDATION_ATTEMPTS + 1):
+        await asyncio.sleep(SAME_COOKIE_REVALIDATION_DELAY_SECONDS)
+        page_result, overview, _ = await detect_webif_overview(
+            session,
+            context_label=f"same_cookie_revalidation:{context}",
+        )
+
+        if page_result in (WEBIF_PAGE_VALID, WEBIF_PAGE_EMPTY):
+            save_validated_session_cookie(session)
+            return SESSION_REVALIDATION_ACCEPTED, page_result, overview
+
+        if page_result == WEBIF_PAGE_TRANSPORT:
+            return SESSION_REVALIDATION_TRANSPORT, page_result, None
+
+    clear_persisted_session_cookie()
+    return SESSION_REVALIDATION_REJECTED, WEBIF_PAGE_LOGIN, None
+
+
+
+
+async def replacement_login_with_validation(session, context, trigger):
+    """Perform one controlled replacement login, then validate its cookie."""
+    global last_control_reason
+    global last_replacement_login_monotonic
+
+    cookie_before = get_session_cookie(session)
+    last_replacement_login_monotonic = time.monotonic()
+
+    login_ok = await login(session)
+    cookie_after_login = get_session_cookie(session)
+    login_cookie_transition = cookie_transition(cookie_before, cookie_after_login)
+
+    if not login_ok:
+        if last_login_result in (LOGIN_RESULT_INDEX_UNREACHABLE, LOGIN_RESULT_REQUEST_FAILED):
+            return SESSION_REVALIDATION_TRANSPORT, None, None
+        return SESSION_REVALIDATION_REJECTED, None, None
+
+    validation_status, overview_result, overview = await same_cookie_revalidate(
+        session,
+        context=f"replacement_login:{context}",
+        trigger=trigger,
+    )
+
+    if validation_status == SESSION_REVALIDATION_ACCEPTED:
+        last_control_reason = None
+        return validation_status, overview_result, overview
+
+    return validation_status, overview_result, overview
+
+
+
+
+async def run_webif_recovery(
+    session,
+    first_failure_time,
+    trigger,
+    transport_outage_confirmed=False,
+    replacement_login_allowed=True,
+):
+    """Long recovery cadence with preserved session and rate-limited replacement-login liveness."""
+    global current_availability
+    global last_replacement_login_monotonic
+
+    current_availability = "offline"
+    mqtt_publish(AVAILABILITY_TOPIC, "offline")
+    mqtt_publish(SYSTEM_STATUS_TOPIC, "WebIF Pause")
+
+    if not replacement_login_allowed and last_replacement_login_monotonic is None:
+        last_replacement_login_monotonic = time.monotonic()
+
+    if transport_outage_confirmed:
+        logger.error("❌ WebIF unavailable – outage confirmed")
+        logger.info("⏳ Recovery mode started – next check in 15 minutes")
+    else:
+        logger.error("❌ WebIF session could not be restored – recovery mode started")
+        logger.info("⏳ Next recovery check in 15 minutes")
+
+    recovery_attempt = 0
+
+    while True:
+        pause_seconds = (
+            WEBIF_RECOVERY_SHORT_PAUSE
+            if recovery_attempt < WEBIF_RECOVERY_SHORT_ATTEMPTS
+            else WEBIF_RECOVERY_LONG_PAUSE
+        )
+        await asyncio.sleep(pause_seconds)
+        recovery_attempt += 1
+
+        mqtt_publish(SYSTEM_STATUS_TOPIC, "WebIF Test")
+        reachable, _ = await check_webif_index_reachability(
+            session,
+            context="recovery",
+            attempt=recovery_attempt,
+        )
+
+        if reachable:
+            validation_status, overview_result, overview = await same_cookie_revalidate(
+                session,
+                context="recovery",
+                trigger=trigger,
+            )
+
+            if validation_status == SESSION_REVALIDATION_ACCEPTED:
+                current_availability = "online"
+                mqtt_publish(AVAILABILITY_TOPIC, "online")
+                mqtt_publish(SYSTEM_STATUS_TOPIC, "online")
+                logger.info("✅ WebIF recovered with existing session – Round Robin resumed")
+                return True, overview_result, overview
+
+            if validation_status == SESSION_REVALIDATION_REJECTED:
+                now_mono = time.monotonic()
+                if last_replacement_login_monotonic is None:
+                    elapsed = None
+                    replacement_allowed_now = True
+                else:
+                    elapsed = max(0.0, now_mono - last_replacement_login_monotonic)
+                    replacement_allowed_now = elapsed >= WEBIF_RECOVERY_LONG_PAUSE
+
+                if replacement_allowed_now:
+                    replacement_status, replacement_overview_result, replacement_overview = (
+                        await replacement_login_with_validation(
+                            session,
+                            context="recovery",
+                            trigger=trigger,
+                        )
+                    )
+                    if replacement_status == SESSION_REVALIDATION_ACCEPTED:
+                        current_availability = "online"
+                        mqtt_publish(AVAILABILITY_TOPIC, "online")
+                        mqtt_publish(SYSTEM_STATUS_TOPIC, "online")
+                        logger.info("✅ WebIF recovered after new login – Round Robin resumed")
+                        return True, replacement_overview_result, replacement_overview
+
+        mqtt_publish(SYSTEM_STATUS_TOPIC, "WebIF Pause")
+
+        if recovery_attempt == WEBIF_RECOVERY_SHORT_ATTEMPTS:
+            logger.warning(
+                "⚠️ WebIF still unavailable after 4 recovery checks – switching to 30-minute interval"
+            )
+            logger.info(
+                "ℹ️ If the WebIF remains unavailable, restart the Webserver in the Weishaupt control:\n"
+                "   set Webserver to OFF, wait 60 seconds, then set Webserver to ON"
+            )
+        elif recovery_attempt < WEBIF_RECOVERY_SHORT_ATTEMPTS:
+            logger.info(
+                f"⏳ WebIF still unavailable – recovery check {recovery_attempt}/"
+                f"{WEBIF_RECOVERY_SHORT_ATTEMPTS}; next check in 15 minutes"
+            )
+        else:
+            logger.info("⏳ WebIF still unavailable – next recovery check in 30 minutes")
+            logger.info(
+                "ℹ️ If the WebIF remains unavailable, restart the Webserver in the Weishaupt control:\n"
+                "   set Webserver to OFF, wait 60 seconds, then set Webserver to ON"
+            )
+
+
+async def handle_transport_interruption(
+    session,
+    context,
+    trigger,
+    replacement_login_allowed=True,
+):
+    """Confirm transport trouble without discarding the main session/cookie."""
+    first_failure_time = datetime.now(timezone.utc).isoformat()
+    if initial_sync_done:
+        logger.warning("⚠️ WebIF connection interrupted – checking availability")
+    failed_control_checks = 0
+    consecutive_index_unreachable = 0
+    replacement_login_used = not replacement_login_allowed
+
+    while failed_control_checks < WEBIF_UNREACHABLE_CONFIRMATIONS:
+        attempt = failed_control_checks + 1
+        reachable, _ = await check_webif_index_reachability(
+            session,
+            context=f"transport_confirmation:{context}",
+            attempt=attempt,
+        )
+
+        if not reachable:
+            failed_control_checks += 1
+            consecutive_index_unreachable += 1
+            if failed_control_checks >= WEBIF_UNREACHABLE_CONFIRMATIONS:
+                break
+            await asyncio.sleep(TRANSPORT_CONFIRMATION_DELAY_SECONDS)
+            continue
+
+        consecutive_index_unreachable = 0
+        validation_status, overview_result, overview = await same_cookie_revalidate(
+            session,
+            context=f"transport_recovery:{context}",
+            trigger=trigger,
+        )
+
+        if validation_status == SESSION_REVALIDATION_ACCEPTED:
+            if initial_sync_done:
+                logger.info("✅ WebIF connection restored – Round Robin resumed")
+            return True, overview_result, overview
+
+        if validation_status == SESSION_REVALIDATION_REJECTED:
+            if not replacement_login_used:
+                replacement_login_used = True
+                replacement_status, replacement_overview_result, replacement_overview = (
+                    await replacement_login_with_validation(
+                        session,
+                        context=f"transport_recovery:{context}",
+                        trigger=trigger,
+                    )
+                )
+                if replacement_status == SESSION_REVALIDATION_ACCEPTED:
+                    if initial_sync_done:
+                        logger.info("✅ WebIF connection restored – Round Robin resumed")
+                    return True, replacement_overview_result, replacement_overview
+
+        failed_control_checks += 1
+        if failed_control_checks >= WEBIF_UNREACHABLE_CONFIRMATIONS:
+            break
+        await asyncio.sleep(TRANSPORT_CONFIRMATION_DELAY_SECONDS)
+
+    transport_outage_confirmed = (
+        consecutive_index_unreachable >= WEBIF_UNREACHABLE_CONFIRMATIONS
+    )
+    return await run_webif_recovery(
+        session,
+        first_failure_time,
+        trigger=trigger,
+        transport_outage_confirmed=transport_outage_confirmed,
+        replacement_login_allowed=not replacement_login_used,
+    )
+
+
+async def resolve_session_suspicion(session, context, trigger):
+    """Same-cookie first; at most one immediate replacement login."""
+    if initial_sync_done:
+        logger.warning("⚠️ WebIF session requires validation – checking existing session")
+    validation_status, overview_result, overview = await same_cookie_revalidate(
+        session,
+        context=context,
+        trigger=trigger,
+    )
+
+    if validation_status == SESSION_REVALIDATION_ACCEPTED:
+        if initial_sync_done:
+            logger.info("✅ WebIF session validated – Round Robin resumed")
+        return True, overview_result, overview
+
+    if validation_status == SESSION_REVALIDATION_TRANSPORT:
+        return await handle_transport_interruption(session, context, trigger)
+
+    if initial_sync_done:
+        logger.warning("⚠️ Existing WebIF session rejected – attempting controlled new login")
+    replacement_status, replacement_overview_result, replacement_overview = (
+        await replacement_login_with_validation(
+            session,
+            context=context,
+            trigger=trigger,
+        )
+    )
+    if replacement_status == SESSION_REVALIDATION_ACCEPTED:
+        if initial_sync_done:
+            logger.info("✅ New WebIF session validated – Round Robin resumed")
+        return True, replacement_overview_result, replacement_overview
+
+    if replacement_status == SESSION_REVALIDATION_TRANSPORT:
+        return await handle_transport_interruption(
+            session,
+            context=f"replacement_login_transport:{context}",
+            trigger=trigger,
+            replacement_login_allowed=False,
+        )
+
+    # Do not create an immediate replacement-login loop. Enter the existing
+    # long recovery cadence with the same main session/cookie instead.
+    return await run_webif_recovery(
+        session,
+        datetime.now(timezone.utc).isoformat(),
+        trigger=f"{trigger}:replacement_login_not_validated",
+        transport_outage_confirmed=False,
+        replacement_login_allowed=False,
+    )
 
 # ---------------------------
 # WEBIF OVERVIEW DETECTION (READ-ONLY TEST)
 # ---------------------------
 
-async def detect_webif_overview(session):
-    """
-    Read-only detection of the Profimodus overview page.
-
-    Return semantics intentionally match the proven fetch() architecture:
-    - None  = session broken / login page / no response
-    - {}    = page readable, but no usable overview entries detected
-    - dict  = valid overview entries detected
-
-    This function does not change URLS, device_ready, SEQUENCE or stats.
-    """
-
+async def detect_webif_overview(session, context_label="startup"):
+    """Read-only detection of the Profimodus overview page."""
     resp, html = await safe_request(
         session,
         "GET",
@@ -440,16 +1037,12 @@ async def detect_webif_overview(session):
     )
 
     if resp is None or html is None:
-        if DEBUG_WEBIF:
-            logger.warning("⚠️ No response while reading Profimodus overview")
-        return None
+        return WEBIF_PAGE_TRANSPORT, None, None
 
-    # IMPORTANT:
-    # Use the same proven login-page detection pattern as fetch().
-    if "form-signin" in html.lower() or "bitte anmelden" in html.lower():
-        if DEBUG_WEBIF:
-            logger.warning("⚠️ Profimodus overview returned login page – session not authenticated")
-        return None
+    if is_login_page(html):
+        global last_control_reason
+        last_control_reason = f"overview: login page returned ({context_label})"
+        return WEBIF_PAGE_LOGIN, None, None
 
     soup = BeautifulSoup(html, "html.parser")
     detected = {}
@@ -457,130 +1050,83 @@ async def detect_webif_overview(session):
     for link in soup.find_all("a", href=True):
         href = link.get("href", "")
         h5 = link.find("h5")
-
         if not h5:
             continue
-
         if "settings_export.html?stack=" not in href:
             continue
-
         stack = href.split("stack=", 1)[1].strip()
-
-        # The overview / 1st-stack page must contain only single-stack links.
-        # If the WEM WebIF returns a deeper page, comma-stack links are ignored here.
         if "," in stack:
             continue
-
         name = h5.get_text(strip=True)
-
         if name and stack:
             detected[name] = stack
 
     if not detected:
-        if DEBUG_WEBIF:
-            logger.warning("⚠️ Profimodus overview readable, but no overview entries detected")
-        return {}
+        return WEBIF_PAGE_EMPTY, {}, None
 
-    # Guard against the WEM WebIF occasionally returning a wrong or incomplete page.
-    # The real 1st-stack overview contains "Fehlerspeicher"; the 2nd-stack data URL
-    # page is guarded separately by requiring "Statistik".
     if "Fehlerspeicher" not in detected:
-        if DEBUG_WEBIF:
-            logger.warning(
-                "⚠️ WebIF overview does not contain Fehlerspeicher – likely wrong/incomplete 1st-stack page; retrying"
-            )
-        return {}
+        return WEBIF_PAGE_EMPTY, {}, None
 
     if DEBUG_WEBIF:
         logger.info("🔍 Detected WebIF overview:")
         for name, stack in detected.items():
             logger.info(f"   • {name}: {stack}")
-    return detected
+    return WEBIF_PAGE_VALID, detected, None
 
 
-async def detect_webif_overview_fast_check(session):
-    """
-    Profimodus fast-check using the same control principle as the proven
-    WP-Fast-Check:
-
-    - None  = session broken / login page / no response -> caller should re-login
-    - {}    = page readable, but no usable overview entries -> keep polling
-    - dict  = valid overview entries detected -> success
-
-    This is still read-only and does not change URLS, device_ready, SEQUENCE or stats.
-    """
-
+async def detect_webif_overview_fast_check(session, initial_result=None):
+    """Preserve the existing 3-second semantic retry for readable empty pages."""
     attempt = 1
+    pending_result = initial_result
 
     while True:
         if DEBUG_WEBIF:
             logger.info(f"🔍 Detecting WebIF overview (attempt {attempt})")
 
-        detected = await detect_webif_overview(session)
+        if pending_result is not None:
+            result, detected = pending_result
+            pending_result = None
+        else:
+            result, detected, _ = await detect_webif_overview(session)
 
-        if detected is None:
-            if DEBUG_WEBIF:
-                logger.warning("⚠️ WebIF overview detection failed – session will be renewed")
-            return None
+        if result in (WEBIF_PAGE_TRANSPORT, WEBIF_PAGE_LOGIN):
+            return result, None
 
-        if detected:
-            logger.info("✅ WebIF overview detection completed")
-            return detected
+        if result == WEBIF_PAGE_VALID:
+            return result, detected
 
-        # detected == {} -> page was readable, but no usable overview entries were found.
+        # WEBIF_PAGE_EMPTY -> authenticated/readable but semantically incomplete.
         if DEBUG_WEBIF:
             logger.info("⏳ WebIF overview contained no usable entries – retrying in 3s")
         await asyncio.sleep(3)
         attempt += 1
-
-
 
 # ---------------------------
 # WEBIF DATA URL DETECTION (READ-ONLY TEST)
 # ---------------------------
 
 async def detect_webif_data_urls(session, overview):
-    """
-    Read-only detection of the final data URLs from the Info 1st-stack page.
-
-    Input:
-    - overview: dict from detect_webif_overview(), containing the 1st-stack links.
-
-    Return semantics intentionally match the proven fetch() architecture:
-    - None  = session broken / login page / no response
-    - {}    = page readable, but no usable data URLs detected
-    - dict  = valid data URLs detected
-
-    This function does not change URLS, device_ready, SEQUENCE or stats.
-    """
-
+    """Read-only detection of the final data URLs from the Info 1st-stack page."""
     info_stack = overview.get("Info") if overview else None
 
     if not info_stack:
-        if DEBUG_WEBIF:
-            logger.warning("⚠️ Info stack missing – unable to detect WebIF data URLs")
-        return {}
+        log_startup_anomaly("data_urls", "Info stack missing from detected overview")
+        return WEBIF_PAGE_EMPTY, {}, None
 
     info_url = f"/settings_export.html?stack={info_stack}"
-
-    resp, html = await safe_request(
-        session,
-        "GET",
-        info_url,
-        headers=HEADERS
-    )
+    resp, html = await safe_request(session, "GET", info_url, headers=HEADERS)
 
     if resp is None or html is None:
-        if DEBUG_WEBIF:
-            logger.warning("⚠️ No response while reading WebIF Info stack")
-        return None
+        log_startup_anomaly("data_urls", "no HTTP response while reading Info stack")
+        return WEBIF_PAGE_TRANSPORT, None, None
 
-    # IMPORTANT:
-    # Use the same proven login-page detection pattern as fetch().
-    if "form-signin" in html.lower() or "bitte anmelden" in html.lower():
-        if DEBUG_WEBIF:
-            logger.warning("⚠️ WebIF Info stack returned login page – session not authenticated")
-        return None
+    if is_login_page(html):
+        log_startup_anomaly(
+            "data_urls",
+            "login page returned while reading Info stack",
+            causes_session_renewal=True,
+        )
+        return WEBIF_PAGE_LOGIN, None, None
 
     soup = BeautifulSoup(html, "html.parser")
     detected = {}
@@ -588,81 +1134,45 @@ async def detect_webif_data_urls(session, overview):
     for link in soup.find_all("a", href=True):
         href = link.get("href", "").strip()
         h5 = link.find("h5")
-
         if not h5:
             continue
-
         if "settings_export.html?stack=" not in href:
             continue
-
-        # The final data URLs contain two stacks separated by a comma.
         if "," not in href:
             continue
-
         name = h5.get_text(strip=True)
-
         if not name:
             continue
-
-        # Keep the complete URL exactly as provided by the WebIF.
-        # Normalize only the leading slash so it matches the existing URLS format.
-        if href.startswith("/"):
-            final_url = href
-        else:
-            final_url = "/" + href
-
+        final_url = href if href.startswith("/") else "/" + href
         detected[name] = final_url
 
     if not detected:
-        if DEBUG_WEBIF:
-            logger.warning("⚠️ WebIF Info stack readable, but no data URLs detected")
-        return {}
+        log_startup_anomaly("data_urls", "HTTP response readable but no data URLs detected")
+        return WEBIF_PAGE_EMPTY, {}, None
 
-    # Guard against the WEM WebIF occasionally returning the 1st-stack overview
-    # instead of the expected Info subpage with 2nd-stack data URLs.
-    # The 2nd-stack device list contains "Statistik"; the 1st-stack overview does not.
-    # If Statistik is missing, this page is not accepted and will be polled again,
-    # using the same {} retry semantics as the proven WP-Fast-Check.
     if "Statistik" not in detected:
-        if DEBUG_WEBIF:
-            logger.warning(
-                "⚠️ WebIF data URL page does not contain Statistik – likely wrong page / 1st-stack overview; retrying"
-            )
-        return {}
+        log_startup_anomaly("data_urls", "Statistik missing; likely wrong page / first-stack overview")
+        return WEBIF_PAGE_EMPTY, {}, None
 
-    return detected
+    return WEBIF_PAGE_VALID, detected, None
 
 
 async def detect_webif_data_urls_fast_check(session, overview):
-    """
-    Data-URL fast-check using the same control principle as the proven
-    WP-Fast-Check and the Profimodus overview fast-check.
-
-    - None  = session broken / login page / no response -> caller should re-login
-    - {}    = page readable, but no usable data URLs -> keep polling
-    - dict  = valid data URLs detected -> success
-
-    This is still read-only and does not change URLS, device_ready, SEQUENCE or stats.
-    """
-
+    """Preserve the existing 3-second semantic retry for readable empty pages."""
     attempt = 1
 
     while True:
         if DEBUG_WEBIF:
             logger.info(f"🔍 Detecting WebIF data URLs (attempt {attempt})")
 
-        detected = await detect_webif_data_urls(session, overview)
+        result, detected, _ = await detect_webif_data_urls(session, overview)
 
-        if detected is None:
-            if DEBUG_WEBIF:
-                logger.warning("⚠️ WebIF data URL detection failed – session will be renewed")
-            return None
+        if result in (WEBIF_PAGE_TRANSPORT, WEBIF_PAGE_LOGIN):
+            return result, None
 
-        if detected:
-            logger.info("✅ WebIF data URL detection completed")
-            return detected
+        if result == WEBIF_PAGE_VALID:
+            return result, detected
 
-        # detected == {} -> page was readable, but no usable data URLs were found.
         if DEBUG_WEBIF:
             logger.info("⏳ WebIF Info stack contained no usable data URLs – retrying in 3s")
         await asyncio.sleep(3)
@@ -716,47 +1226,66 @@ def extract_values(html):
 # FETCH
 # ---------------------------
 
-async def fetch(session, name, url):
 
+async def fetch(session, name, url):
+    global last_control_reason
+    global last_fetch_control
+
+    last_fetch_control = FETCH_CONTROL_NONE
     stats[name]["total"] += 1
 
     resp, html = await safe_request(session, "GET", url, headers=HEADERS)
 
     if resp is None or html is None:
-        logger.warning(f"⚠️ No response from WEM‑Local ({name})")
+        last_control_reason = f"request failed during poll of {name}"
+        last_fetch_control = FETCH_CONTROL_TRANSPORT
         stats[name]["failed"] += 1
         return None
 
-    if "form-signin" in html.lower() or "bitte anmelden" in html.lower():
+    first_login_page = is_login_page(html)
+    if first_login_page:
+        last_control_reason = f"login page returned during poll of {name}"
+        last_fetch_control = FETCH_CONTROL_SESSION
         stats[name]["failed"] += 1
         return None
 
     values = extract_values(html)
+    first_wrong_section = is_wrong_section(name, values) if values else False
 
     if not values:
-        await asyncio.sleep(1.5)
+        await asyncio.sleep(NORMAL_RETRY_DELAY_SECONDS)
         resp2, html2 = await safe_request(session, "GET", url, headers=HEADERS)
 
-        if resp2 and html2:
-            retry_values = extract_values(html2)
+        if resp2 is None or html2 is None:
+            stats[name]["failed"] += 1
+            return {}
 
-            if retry_values:
-                if is_wrong_section(name, retry_values):
-                    stats[name]["failed"] += 1
-                    return {}
+        retry_login_page = is_login_page(html2)
+        retry_values = extract_values(html2)
+        retry_wrong_section = is_wrong_section(name, retry_values) if retry_values else False
 
-                stats[name]["retry_success"] += 1
-                return retry_values
+        if retry_values:
+            if retry_wrong_section:
+                stats[name]["failed"] += 1
+                return {}
+
+            stats[name]["retry_success"] += 1
+            return retry_values
 
         stats[name]["failed"] += 1
+        if retry_login_page:
+            last_control_reason = f"login page returned during retry poll of {name}"
+            last_fetch_control = FETCH_CONTROL_SESSION
+            return None
         return {}
 
-    if is_wrong_section(name, values):
+    if first_wrong_section:
         stats[name]["failed"] += 1
         return {}
 
     stats[name]["first_success"] += 1
     return values
+
 
 
 # ---------------------------
@@ -778,7 +1307,6 @@ def apply_detected_data_urls(data_urls):
     global stats
 
     if not data_urls or "Wärmepumpe" not in data_urls:
-        logger.error("❌ Dynamic WebIF data URLs incomplete – Wärmepumpe URL missing")
         return False
 
     new_urls = {}
@@ -795,16 +1323,7 @@ def apply_detected_data_urls(data_urls):
         for name in URLS.keys()
     }
 
-    logger.info("✅ Using dynamically detected WebIF data URLs")
-
-    logger.info("🔍 Detected WebIF data URLs:")
-    url_name_width = max(len(name) for name in URLS.keys())
-    for name, url in URLS.items():
-        logger.info(f"   • {name:<{url_name_width}}: {url}")
-
-    logger.info("📋 Active WebIF devices:")
-    for name in URLS.keys():
-        logger.info(f"   • {name}")
+    logger.info("✅ WebIF devices detected: " + ", ".join(URLS.keys()))
 
     return True
 
@@ -831,6 +1350,7 @@ def publish_discovery(data_store):
         "state_topic": SYSTEM_STATUS_TOPIC,
         "value_template": "{{ value }}",
         "icon": "mdi:heat-pump",
+        "entity_category": "diagnostic",
         "availability_topic": AVAILABILITY_TOPIC,
         "payload_available": "online",
         "payload_not_available": "offline",
@@ -848,6 +1368,36 @@ def publish_discovery(data_store):
         retain=True
     )
 
+    webif_status_payload = {
+        "name": "WebIF-Status",
+        "uniq_id": "wem_lokal_webif_status",
+        "state_topic": SYSTEM_STATUS_TOPIC,
+        "value_template": (
+            "{% set states = {"
+            "'online': 'Verbunden', "
+            "'offline': 'Offline – App-Log', "
+            "'WebIF Test': 'Überprüfungsphase – App-Log', "
+            "'WebIF Pause': 'Erholungsphase – App-Log', "
+            "'WebIF Neustart': 'App-Startphase – App-Log'"
+            "} %}"
+            "{{ states.get(value, value) }}"
+        ),
+        "icon": "mdi:web",
+        "entity_category": "diagnostic",
+        "device": {
+            "identifiers": [main_device_id],
+            "name": "WEM-Lokal Info",
+            "manufacturer": "Weishaupt",
+            "model": wp_model
+        }
+    }
+
+    mqtt_publish(
+        f"{MQTT_BASE}/sensor/wem_lokal_webif_status/config",
+        webif_status_payload,
+        retain=True
+    )
+
     last_update_payload = {
         "name": "Update Sensoren",
         "uniq_id": "wem_lokal_last_update",
@@ -855,6 +1405,7 @@ def publish_discovery(data_store):
         "state_topic": LAST_UPDATE_TOPIC,
 
         "device_class": "timestamp",
+        "entity_category": "diagnostic",
 
         "availability_topic": AVAILABILITY_TOPIC,
         "payload_available": "online",
@@ -884,6 +1435,7 @@ def publish_discovery(data_store):
 
         "unit_of_measurement": "%",
         "icon": "mdi:chart-line",
+        "entity_category": "diagnostic",
 
         "availability_topic": AVAILABILITY_TOPIC,
         "payload_available": "online",
@@ -1059,6 +1611,24 @@ def publish_discovery(data_store):
             mqtt_publish(disc_topic, payload, retain=True)
 
 # ---------------------------
+# DAILY WEBIF REST
+# ---------------------------
+
+
+async def run_daily_webif_rest(session, jar, statistics_date):
+    """90-second request-free transport reset while preserving WEM session cookie."""
+    await session.close()
+    await asyncio.sleep(DAILY_WEBIF_REST_SECONDS)
+
+    new_session = aiohttp.ClientSession(
+        base_url=BASE_URL,
+        cookie_jar=jar,
+    )
+    return new_session
+
+
+
+# ---------------------------
 # STATISTICS OUTPUT
 # ---------------------------
 
@@ -1090,40 +1660,26 @@ def output_statistics():
         if total == 0:
             continue
 
-        first = s["first_success"]
-        retry = s["retry_success"]
-        failed = s["failed"]
-
-        first_pct = (first / total) * 100
-        retry_pct = (retry / total) * 100
-        failed_pct = (failed / total) * 100
-        total_pct = ((first + retry) / total) * 100
-
-        logger.info(f" {device}:")
-        logger.info(f"  First-pass success rate: {first_pct:5.1f} % ({first})")
-        logger.info(f"  Retry-pass success rate: {retry_pct:5.1f} % ({retry})")
-        logger.info(f"  Overall failure rate:    {failed_pct:5.1f} % ({failed})")
-        logger.info(f"  Overall success rate:    {total_pct:5.1f} % ({first + retry}/{total})")
-
         system_total += total
-        system_first += first
-        system_retry += retry
-        system_failed += failed
+        system_first += s["first_success"]
+        system_retry += s["retry_success"]
+        system_failed += s["failed"]
 
     if system_total > 0:
 
-        system_first_pct = (system_first / system_total) * 100
-        system_retry_pct = (system_retry / system_total) * 100
-        system_failed_pct = (system_failed / system_total) * 100
         system_total_pct = ((system_first + system_retry) / system_total) * 100
 
-        logger.info(" Overall system:")
-        logger.info(f"  First-pass success rate: {system_first_pct:5.1f} % ({system_first})")
-        logger.info(f"  Retry-pass success rate: {system_retry_pct:5.1f} % ({system_retry})")
-        logger.info(f"  Overall failure rate:    {system_failed_pct:5.1f} % ({system_failed})")
-        logger.info(f"  Overall success rate:    {system_total_pct:5.1f} % ({system_first + system_retry}/{system_total})")
-
         stats_day = time.localtime(time.time() - 86400)
+
+        log_date = (
+            f"{stats_day.tm_year:04d}-"
+            f"{stats_day.tm_mon:02d}-"
+            f"{stats_day.tm_mday:02d}"
+        )
+        logger.info(
+            f"🕒 [{log_date}] Daily statistics – {system_total_pct:.1f}% successful "
+            f"({system_first + system_retry}/{system_total} polls, {system_failed} failed)"
+        )
 
         date_string = (
             f"{stats_day.tm_mday:02d}."
@@ -1180,18 +1736,20 @@ async def main():
     global device_ready
     global SEQUENCE
     global stats
+    global last_control_reason
 
     jar = aiohttp.CookieJar(unsafe=True)
-
-    async with aiohttp.ClientSession(
+    session = aiohttp.ClientSession(
         base_url=BASE_URL,
         cookie_jar=jar
-    ) as session:
+    )
 
+    try:
         data_store = {}
         dynamic_urls_ready = False
         last_success = time.time()
         last_status = "offline"
+        overview_initial_result = None
 
         stored_stats = load_last_daily_stats()
 
@@ -1224,92 +1782,137 @@ async def main():
                 }
             )
 
-        logger.info("📡 Discovery active until all devices provide initial data")
+        # Reuse a previously protected-page-validated session across app
+        # restarts/updates.  The proven fresh-login startup path remains the
+        # exact fallback when no persisted cookie exists or the WebIF
+        # explicitly rejects it.  Transport errors do not invalidate it.
+        validation_status, overview_result, overview = await startup_validate_persisted_session(session)
 
-        logger.info("ℹ️ Initializing WebIF and detecting available devices (may take up to 5 minutes)")
+        if validation_status == SESSION_REVALIDATION_TRANSPORT:
+            return
 
-        resp, _ = await safe_request(session, "GET", "/index.html")
+        if validation_status != SESSION_REVALIDATION_ACCEPTED:
+            logger.info("ℹ️ Establishing WebIF session – this may take up to 5 minutes")
 
-        if resp is None:
-            logger.error("❌ Web interface not reachable – entering recovery wait mode (15 minutes)")
-            logger.error(f"🔧 Technical info: IP {IP} could not be contacted")
-            logger.error("🔍 Please check:")
-            logger.error("   • Web interface IP address")
-            logger.error("   • Whether the web interface is enabled")
-            logger.error("   • Network connectivity")
-            logger.error("   • Firewall / VLAN settings")
-            logger.error("⏳ Waiting 15 minutes before restart")
-            
-            await asyncio.sleep(900)
-            logger.error("🛑 Recovery timeout expired – restarting application")
-            sys.exit(1)
+            # No separate unbounded/15-minute startup reachability branch is used.
+            # login() already probes /index.html on every attempt, and the whole
+            # startup authentication phase is bounded to STARTUP_AUTH_MAX_SECONDS.
+            # This keeps "first valid login" semantically separate from runtime
+            # outage/session recovery.
+            # Fast bounded startup authentication, intentionally close to the
+            # proven v1.1.10 startup behavior: login -> 5 s grace -> protected
+            # overview check -> fresh login if that new cookie is explicitly
+            # rejected.  Only after the first protected validation does strict
+            # runtime session preservation begin.
+            validation_status, overview_result, overview = await startup_authenticate_fast(session)
 
+            if validation_status != SESSION_REVALIDATION_ACCEPTED:
+                return
+
+            save_validated_session_cookie(session)
+
+        if overview_result in (WEBIF_PAGE_VALID, WEBIF_PAGE_EMPTY):
+            overview_initial_result = (overview_result, overview)
+
+        last_control_reason = None
+
+        # Main startup / runtime control loop. Unlike v1.1.10, session or
+        # transport anomalies return here after in-process recovery instead of
+        # forcing an unconditional login at the top of the loop.
         while True:
-
-            if not await login(session):
-
-                login_fail_count += 1
-
-                logger.warning(
-                    f"⚠️ Login failed ({login_fail_count} consecutive attempts) – retrying in 10s"
-                )
-
-                if login_fail_count == 5:
-                    logger.error("❌ Login has failed 5 consecutive times")
-                    logger.error("🔍 Please check:")
-                    logger.error("   • Username")
-                    logger.error("   • Password")
-                    logger.error("   • Web interface settings")
-
-                await asyncio.sleep(10)
-                continue
-
-            login_fail_count = 0
-
-            await asyncio.sleep(5.0)
-
-            session_broken = False
+            control_restart = False
 
             if not dynamic_urls_ready:
+                overview_result, overview = await detect_webif_overview_fast_check(
+                    session,
+                    initial_result=overview_initial_result,
+                )
+                overview_initial_result = None
 
-                # Profimodus fast-check with WP-Fast-Check-style handling
-                overview = await detect_webif_overview_fast_check(session)
-
-                if overview is None:
-                    session_broken = True
+                if overview_result == WEBIF_PAGE_LOGIN:
+                    _, recovered_overview_result, recovered_overview = await resolve_session_suspicion(
+                        session,
+                        context="startup_overview",
+                        trigger="login_page_during_overview_detection",
+                    )
+                    if recovered_overview_result in (WEBIF_PAGE_VALID, WEBIF_PAGE_EMPTY):
+                        overview_initial_result = (recovered_overview_result, recovered_overview)
                     continue
 
-                # Detect final WebIF data URLs from the Info stack and apply them
-                detected_data_urls = await detect_webif_data_urls_fast_check(session, overview)
+                if overview_result == WEBIF_PAGE_TRANSPORT:
+                    _, recovered_overview_result, recovered_overview = await handle_transport_interruption(
+                        session,
+                        context="startup_overview",
+                        trigger="transport_during_overview_detection",
+                    )
+                    if recovered_overview_result in (WEBIF_PAGE_VALID, WEBIF_PAGE_EMPTY):
+                        overview_initial_result = (recovered_overview_result, recovered_overview)
+                    continue
 
-                if detected_data_urls is None:
-                    session_broken = True
+                data_url_result, detected_data_urls = await detect_webif_data_urls_fast_check(
+                    session, overview
+                )
+
+                if data_url_result == WEBIF_PAGE_LOGIN:
+                    _, recovered_overview_result, recovered_overview = await resolve_session_suspicion(
+                        session,
+                        context="startup_data_urls",
+                        trigger="login_page_during_data_url_detection",
+                    )
+                    if recovered_overview_result == WEBIF_PAGE_VALID:
+                        overview_initial_result = (recovered_overview_result, recovered_overview)
+                    else:
+                        # The previously valid overview remains usable; no URL
+                        # state is discarded solely because of session recovery.
+                        overview_initial_result = (WEBIF_PAGE_VALID, overview)
+                    continue
+
+                if data_url_result == WEBIF_PAGE_TRANSPORT:
+                    _, recovered_overview_result, recovered_overview = await handle_transport_interruption(
+                        session,
+                        context="startup_data_urls",
+                        trigger="transport_during_data_url_detection",
+                    )
+                    if recovered_overview_result == WEBIF_PAGE_VALID:
+                        overview_initial_result = (recovered_overview_result, recovered_overview)
+                    else:
+                        overview_initial_result = (WEBIF_PAGE_VALID, overview)
                     continue
 
                 if not apply_detected_data_urls(detected_data_urls):
-                    logger.error("🛑 Dynamic WebIF URL detection failed – app is shutting down")
+                    logger.error("❌ WebIF device detection failed – app cannot start")
                     sys.exit(1)
 
                 data_store = {key: {} for key in URLS.keys()}
                 dynamic_urls_ready = True
-            
+
             # ---------------------------
             # WP-FAST-CHECK (Heat pump fast check until first valid data)
             # ---------------------------
-
             if not initial_sync_done:
-
                 while True:
                     values = await fetch(session, "Wärmepumpe", URLS["Wärmepumpe"])
 
                     if values is None:
-                        session_broken = True
+                        trigger = last_control_reason or "startup heat-pump fast-check"
+                        if last_fetch_control == FETCH_CONTROL_SESSION:
+                            await resolve_session_suspicion(
+                                session,
+                                context="startup_wp_fast_check",
+                                trigger=trigger,
+                            )
+                        elif last_fetch_control == FETCH_CONTROL_TRANSPORT:
+                            await handle_transport_interruption(
+                                session,
+                                context="startup_wp_fast_check",
+                                trigger=trigger,
+                            )
+                        control_restart = True
                         break
 
                     if values:
                         data_store["Wärmepumpe"] = values
                         device_ready["Wärmepumpe"] = True
-                        log_device_ready("Wärmepumpe")
 
                         mqtt_publish(
                             LAST_UPDATE_TOPIC,
@@ -1320,51 +1923,55 @@ async def main():
                             MQTT_STATE_TOPIC,
                             {"WEM-Lokal Info": build_clean_data(data_store)}
                         )
+                        break
 
-                        break  # Heat pump delivered data → fast-check completed
+                    await asyncio.sleep(3)
 
-                    await asyncio.sleep(3)  # Fast-check interval
-
-                if session_broken:
+                if control_restart:
                     continue
-                    
+
             # ---------------------------
             # INITIAL SYNC (optimized)
             # ---------------------------
-
             if not initial_sync_done:
-
                 for dev in INITIAL_SYNC_ORDER:
-
                     if dev not in URLS:
                         continue
 
                     values = {}
 
                     for attempt in range(INITIAL_SYNC_RETRIES + 1):
-
                         values = await fetch(session, dev, URLS[dev])
 
                         if values is None:
-                            session_broken = True
+                            trigger = last_control_reason or f"initial sync control interruption ({dev})"
+                            if last_fetch_control == FETCH_CONTROL_SESSION:
+                                await resolve_session_suspicion(
+                                    session,
+                                    context="initial_sync",
+                                    trigger=trigger,
+                                )
+                            elif last_fetch_control == FETCH_CONTROL_TRANSPORT:
+                                await handle_transport_interruption(
+                                    session,
+                                    context="initial_sync",
+                                    trigger=trigger,
+                                )
+                            control_restart = True
                             break
 
                         if values:
                             break
 
                         if attempt < INITIAL_SYNC_RETRIES:
-                            logger.info(
-                                f"🔄 Initial sync retry {attempt + 1}/{INITIAL_SYNC_RETRIES} ({dev})"
-                            )
                             await asyncio.sleep(INITIAL_SYNC_RETRY_DELAY)
 
-                    if session_broken:
+                    if control_restart:
                         break
 
                     if values:
                         data_store[dev] = values
                         device_ready[dev] = True
-                        log_device_ready(dev)
 
                         mqtt_publish(
                             LAST_UPDATE_TOPIC,
@@ -1379,33 +1986,56 @@ async def main():
                             {"WEM-Lokal Info": build_clean_data(data_store)}
                         )
 
-                    else:
-                        logger.warning(
-                            f"⚠️ Initial sync failed for {dev}"
-                        )
-
-                    # Retry polling during initial synchronization
                     await asyncio.sleep(2)
 
-                if not session_broken:
-                    initial_sync_done = True
+                if control_restart:
+                    continue
+
+                initial_sync_done = True
+                waiting_for_initial_data = [
+                    name for name, ready in device_ready.items() if not ready
+                ]
+                if waiting_for_initial_data:
                     logger.info(
-                        "🔄 Initial sync completed – switching to Round Robin polling"
+                        "ℹ️ Initial sync completed – Round Robin active; waiting for initial data from: "
+                        + ", ".join(waiting_for_initial_data)
                     )
+                else:
+                    logger.info("✅ Initial sync completed – Round Robin active")
 
+            # ---------------------------
+            # ROUND ROBIN
+            # ---------------------------
             while True:
-
-                session_broken = False
-
-                for name in SEQUENCE:
-
+                control_restart = False
+                for rr_slot, name in enumerate(SEQUENCE, start=1):
                     if name not in URLS:
                         continue
 
                     values = await fetch(session, name, URLS[name])
 
                     if values is None:
-                        session_broken = True
+                        reason = last_control_reason or f"unclassified poll interruption ({name})"
+
+                        if last_fetch_control == FETCH_CONTROL_SESSION:
+                            await resolve_session_suspicion(
+                                session,
+                                context="round_robin",
+                                trigger=reason,
+                            )
+                        elif last_fetch_control == FETCH_CONTROL_TRANSPORT:
+                            await handle_transport_interruption(
+                                session,
+                                context="round_robin",
+                                trigger=reason,
+                            )
+                        else:
+                            logger.error(
+                                f"❌ Unexpected WebIF control interruption – {reason}"
+                            )
+
+                        last_control_reason = None
+                        control_restart = True
                         break
 
                     if values:
@@ -1437,9 +2067,6 @@ async def main():
                         publish_discovery(data_store)
 
                         if all_devices_ready():
-                            logger.info("ℹ️ All devices provided initial data – discovery disabled")
-                            log_summary_after_discovery(data_store)
-                            logger.info("🕒 Daily polling statistics will be generated at 00:00")
                             discovery_enabled = False
 
                     # ---------------------------------------------------------
@@ -1448,21 +2075,20 @@ async def main():
                     now = time.localtime()
 
                     if now.tm_yday != last_stats_day:
-
-                        # Statistik wird für den Vortag erzeugt
                         stats_day = time.localtime(time.time() - 86400)
 
-                        weekday_short = {
-                            0: "Mon", 1: "Tue", 2: "Wed", 3: "Thu",
-                            4: "Fri", 5: "Sat", 6: "Sun"
-                        }
-
-                        weekday_str = weekday_short[stats_day.tm_wday]
-                        date_str = f"{weekday_str}, {stats_day.tm_year}-{stats_day.tm_mon:02d}-{stats_day.tm_mday:02d}"
-                        logger.info(f"🕒 Creating daily statistics for {date_str}")
+                        statistics_date = (
+                            f"{stats_day.tm_year}-{stats_day.tm_mon:02d}-{stats_day.tm_mday:02d}"
+                        )
                         output_statistics()
-                        logger.info(f"🕒 Daily statistics generated for {date_str}")
                         last_stats_day = now.tm_yday
+
+                        session = await run_daily_webif_rest(session, jar, statistics_date)
+                        logger.info(
+                            f"✅ [{statistics_date}] Daily WebIF rest completed – "
+                            f"{DAILY_WEBIF_REST_SECONDS:.0f} s, session preserved"
+                        )
+
 
                     if time.time() - last_success > OFFLINE_TIMEOUT and last_status != "offline":
                         mqtt_publish(SYSTEM_STATUS_TOPIC, "offline")
@@ -1470,8 +2096,19 @@ async def main():
 
                     await asyncio.sleep(PAUSE_SECONDS)
 
-                if session_broken:
+                if control_restart:
                     break
+
+            if control_restart:
+                continue
+
+    finally:
+        try:
+            if session is not None and not session.closed:
+                await session.close()
+        except Exception:
+            pass
+        logger.info("🛑 WEM-Lokal MQTT stopped")
 
 # ---------------------------
 # START
