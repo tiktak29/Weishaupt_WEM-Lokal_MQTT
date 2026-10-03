@@ -408,23 +408,6 @@ The following dashboard shows an example of automatically detected Weishaupt WEM
 
 ---
 
-### Example Startup Log
-
-The following screenshots show the earlier v1.1.0 log format. For the current v1.1.1 public log and both startup paths, see [Startup Log](#startup-log).
-
-![Startup Log](images/startup-log-1.jpg)
-![Startup Log](images/startup-log-2.jpg)
-
----
-
-### Example Daily Statistics
-
-The following screenshot shows the earlier detailed v1.1.0 log format. The current v1.1.1 summary and daily rest message are shown in [Daily Statistics](#daily-statistics).
-
-![Daily Statistics](images/daily-statistics-log.jpg)
-
----
-
 ## Changelog
 
 See: [CHANGELOG.md](./CHANGELOG.md)
