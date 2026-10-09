@@ -404,7 +404,7 @@ Every compatibility report helps improve support for additional controller gener
 
 The following dashboard shows an example of automatically detected Weishaupt WEM-Lokal devices and sensors in Home Assistant.
 
-![Dashboard](images/dashboard.jpg)
+![Dashboard](images/dashboard.png)
 
 ---
 
