@@ -251,7 +251,7 @@ logging.basicConfig(
     datefmt="%Y-%m-%d %H:%M:%S"
 )
 logger = logging.getLogger("wem_mqtt_unified")
-logger.info("🚀 Starting Weishaupt WEM-Lokal MQTT v1.1.1")
+logger.info("🚀 Starting Weishaupt WEM-Lokal MQTT v1.1.2")
 try:
     signal.signal(signal.SIGTERM, signal_handler)
 except Exception:
@@ -1308,6 +1308,13 @@ def apply_detected_data_urls(data_urls):
 
     if not data_urls or "Wärmepumpe" not in data_urls:
         return False
+
+    # Compatibility: WebIF with a single heating circuit labels it "Heizkreis".
+    # Map that label to the existing HK1 path only if no numbered HK exists.
+    if "Heizkreis" in data_urls and not any(
+        f"Heizkreis {index}" in data_urls for index in range(1, 5)
+    ):
+        data_urls = {**data_urls, "Heizkreis 1": data_urls["Heizkreis"]}
 
     new_urls = {}
 
