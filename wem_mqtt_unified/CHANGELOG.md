@@ -1,5 +1,16 @@
 # Changelog
 
+## v1.1.2 – Fix: Single Heating Circuit Detection
+
+### Changes
+
+* Recognize the unnumbered `Heizkreis` entry in the WebIF Info menu when none of `Heizkreis 1`–`Heizkreis 4` exists. Map it internally to the existing `Heizkreis 1` device.
+* Preserve existing numbered heating-circuit detection, MQTT identifiers, and the existing Round-Robin, HTML parser, login, session and recovery implementation.
+
+### Upgrade notes
+
+* Normal Home Assistant update from v1.1.1; configuration options and schema are unchanged.
+
 ## v1.1.1 – Persistent WebIF Sessions & Recovery
 
 ### Upgrade notes
