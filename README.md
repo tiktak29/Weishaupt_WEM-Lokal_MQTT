@@ -47,7 +47,6 @@ At startup, the app automatically detects:
 
 * the connected heat pump model
 * all available heating circuits from HK1 to HK4
-* an unnumbered `Heizkreis` WebIF entry (single-circuit controllers), internally assigned to HK1
 * statistics
 * the second auxiliary heater (2. WEZ), if available
 
