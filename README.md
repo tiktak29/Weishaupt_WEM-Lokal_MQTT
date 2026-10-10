@@ -15,7 +15,7 @@ Local data extraction from Weishaupt heat pumps via the integrated Weishaupt WEM
 >
 > This patch recognizes an unnumbered `Heizkreis` WebIF entry as the existing `Heizkreis 1` device
 > when no numbered heating circuits are present. No configuration/schema changes are required.
-> Use the normal Home Assistant app update. A live test on a system with an unnumbered heating circuit is still pending.
+> Use the normal Home Assistant app update.
 
 > ℹ️ **Updating from v1.1.0 to v1.1.1**
 >
