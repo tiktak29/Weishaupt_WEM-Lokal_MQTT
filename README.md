@@ -1,6 +1,6 @@
 # Weishaupt WEM-Lokal MQTT
 
-![Version](https://img.shields.io/badge/version-v1.1.1-blue)
+![Version](https://img.shields.io/badge/version-v1.1.2-blue)
 ![Home Assistant](https://img.shields.io/badge/Home%20Assistant-App-green)
 ![MQTT](https://img.shields.io/badge/MQTT-Discovery-orange)
 ![License](https://img.shields.io/badge/license-MIT-brightgreen)
@@ -10,6 +10,12 @@ Local data extraction from Weishaupt heat pumps via the integrated Weishaupt WEM
 **Automatically detects the complete WebIF structure and all supported devices without requiring manual HEX configuration, static URLs or model-specific settings.**
 
 ---
+
+> ℹ️ **Updating from v1.1.1 to v1.1.2**
+>
+> This patch recognizes an unnumbered `Heizkreis` WebIF entry as the existing `Heizkreis 1` device
+> when no numbered heating circuits are present. No configuration/schema changes are required.
+> Use the normal Home Assistant app update. The WSB6 live test remains pending.
 
 > ℹ️ **Updating from v1.1.0 to v1.1.1**
 >
@@ -41,6 +47,7 @@ At startup, the app automatically detects:
 
 * the connected heat pump model
 * all available heating circuits from HK1 to HK4
+* an unnumbered `Heizkreis` WebIF entry (single-circuit controllers), internally assigned to HK1
 * statistics
 * the second auxiliary heater (2. WEZ), if available
 
