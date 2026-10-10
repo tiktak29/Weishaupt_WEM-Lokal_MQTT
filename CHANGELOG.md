@@ -10,7 +10,7 @@
 ### Upgrade notes and verification
 
 * Normal Home Assistant update from v1.1.1; configuration options and schema are unchanged.
-* Regression and simulated single-circuit tests passed offline. Real WSB6 verification is still pending.
+* Regression and simulated single-circuit tests passed offline. A live test on a system with an unnumbered heating circuit is still pending.
 * The known `Hz` frequency-classification issue is outside the scope of this patch.
 
 ## v1.1.1 – Persistent WebIF Sessions & Recovery
