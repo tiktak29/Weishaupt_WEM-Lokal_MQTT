@@ -44,7 +44,12 @@ def load_real_functions(path):
 def get_discovery(ns, events, section, key, initial):
     events.clear()
     ns["publish_discovery"]({section: {key: initial}})
-    matching = [item[1] for item in events if item[0].endswith(f"/{ns['normalize_id'](key)}/config")]
+    matching = [
+        item[1] for item in events
+        if item[0].endswith("/config")
+        and isinstance(item[1], dict)
+        and item[1].get("name") == key
+    ]
     if len(matching) != 1:
         raise AssertionError((section, key, initial, len(matching)))
     return matching[0]
