@@ -22,6 +22,11 @@ from test_issue14_v113 import load_real_functions, OLD, NEW
 
 HOST = "127.0.0.1"
 PORT = int(os.environ.get("WEM_HA_TEST_MQTT_PORT", "18884"))
+UPGRADE_SCENARIO = os.environ.get("WEM_UPGRADE_SCENARIO", "bad_config_first")
+assert UPGRADE_SCENARIO in (
+    "bad_config_first", "bad_state_first",
+    "normalized_config_first", "normalized_state_first"
+), f"Unrecognized scenario: {UPGRADE_SCENARIO}"
 LOG = logging.getLogger("wem_issue14_ha_core")
 logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
 
@@ -155,10 +160,58 @@ async def run_test():
                            "v1.1.2 unchanged operating hours", 40)
             LOG.info("Baseline v1.1.2 Discovery was processed by Home Assistant")
 
-            # Publish new retained config on IDENTICAL topics to migrate in place.
-            await send(prepare_discovery(ns_new, events_new, INITIAL))
-            await send([("wem/wem_lokal_info",
-                        {"WEM-Lokal Info": ns_new["build_clean_data"]({"Wärmepumpe": INITIAL})}, True)])
+            # Positive control: repair ONLY the simulated old sensor's MQTT
+            # state, without changing its retained v1.1.2 discovery config.
+            # This distinguishes a stale nonnumeric internal value from
+            # a general v1.1.3 Discovery migration bug.
+            if UPGRADE_SCENARIO.startswith("normalized_"):
+                normalized = dict(INITIAL)
+                normalized["Verdichter"] = "0"
+                await send([("wem/wem_lokal_info",
+                             {"WEM-Lokal Info": ns_old["build_clean_data"](
+                                 {"Wärmepumpe": normalized}
+                             )}, True)])
+                await wait_for(
+                    lambda: require_state(hass, old_ids["Verdichter"], "h",
+                                          value="0", state_class="total_increasing"),
+                    "normalized old h sensor state", 30
+                )
+                LOG.info("Positive control: old sensor now has valid numeric 0 (unit h)")
+            else:
+                LOG.info("Fault case: old sensor retains invalid 0 Hz (unit h)")
+
+            # Explicitly record all unhandled asyncio task exceptions.
+            # These must not silently pass merely because later states recover.
+            loop = asyncio.get_running_loop()
+            saved_handler = loop.get_exception_handler()
+            unhandled = []
+
+            def track_task_exception(loop, context):
+                unhandled.append(context)
+                if saved_handler is None:
+                    loop.default_exception_handler(context)
+                else:
+                    saved_handler(loop, context)
+
+            loop.set_exception_handler(track_task_exception)
+
+            # Test both the existing CI ordering and the ACTUAL app ordering:
+            # script.py publishes MQTT_STATE_TOPIC BEFORE publish_discovery().
+            next_discovery = prepare_discovery(ns_new, events_new, INITIAL)
+            next_state = [("wem/wem_lokal_info",
+                           {"WEM-Lokal Info": ns_new["build_clean_data"](
+                               {"Wärmepumpe": INITIAL}
+                           )}, True)]
+            if UPGRADE_SCENARIO.endswith("state_first"):
+                LOG.info("Upgrade order: state BEFORE Discovery (matches app)")
+                await send(next_state)
+                await asyncio.sleep(0.35)
+                await send(next_discovery)
+            else:
+                LOG.info("Upgrade order: Discovery BEFORE state (control)")
+                await send(next_discovery)
+                await asyncio.sleep(0.35)
+                await send(next_state)
             expected = {
                 "Verdichter": ("Hz", "0"),
                 "Soll Frequenz Verdichter": ("Hz", "0"),
@@ -195,7 +248,33 @@ async def run_test():
                             "wem_lokal_wp_" + ns_new["normalize_id"](k) for k in KEYS
                         }]
             assert len(relevant) == len(KEYS), f"Duplicate or missing entities: {relevant}"
-            LOG.info("PASS: real Home Assistant MQTT discovery, retained v1.1.2 -> v1.1.3 update, all states, unit classes, IDs and registry uniqueness")
+            # Let queued entity update callbacks finish before classifying
+            # the migration's exception behavior.
+            await asyncio.sleep(1.0)
+            errors = [str(context.get("exception") or context.get("message"))
+                      for context in unhandled]
+            LOG.info("UPGRADE_EXCEPTION_AUDIT scenario=%s count=%d details=%s",
+                     UPGRADE_SCENARIO, len(errors), errors)
+            if UPGRADE_SCENARIO.startswith("bad_"):
+                assert any("non-numeric value: '0 Hz'" in error for error in errors), (
+                    "Expected to reproduce the stale invalid MQTT state upgrade "
+                    f"error, but got: {errors}"
+                )
+                LOG.warning(
+                    "CONFIRMED: Upgrade with stale 0 Hz provokes unhandled "
+                    "Home Assistant exception in scenario %s",
+                    UPGRADE_SCENARIO,
+                )
+            else:
+                assert not errors, (
+                    "Unexpected unhandled exception even after normalizing "
+                    f"the old MQTT state first: {errors}"
+                )
+                LOG.info(
+                    "CONTROL PASS: Normalized old numeric state avoids unhandled "
+                    "exception in scenario %s", UPGRADE_SCENARIO
+                )
+            LOG.info("SCENARIO COMPLETE: HA entity states correct; exceptions explicitly audited")
         finally:
             await hass.async_stop(force=True)
 
