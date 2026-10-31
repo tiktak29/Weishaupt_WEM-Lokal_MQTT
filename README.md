@@ -24,8 +24,6 @@ Local data extraction from Weishaupt heat pumps via the integrated Weishaupt WEM
 > Version 1.1.0 introduced fully automatic WebIF detection and removed the manual HEX code and device-enable options.
 >
 > Obsolete v1.0.x options may remain stored and generate Supervisor warnings. If these old options are still present, note your WebIF and MQTT settings before uninstalling and reinstalling the current app to remove them.
->
-> This legacy cleanup does not apply to a normal v1.1.0 → v1.1.1 update.
 
 ---
 
