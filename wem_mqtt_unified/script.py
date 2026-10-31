@@ -1593,11 +1593,18 @@ def publish_discovery(data_store):
                     "}}", " | replace('m3/h','') | replace('m³/h','') }}"
                 )
 
-            elif v_lower.endswith(" hz"):
+            elif (
+                v_lower.endswith(" hz")
+                or (
+                    section == "Wärmepumpe"
+                    and "frequenz verdichter" in key_lower
+                    and not v_lower.endswith(" rpm")
+                )
+            ):
                 payload["unit_of_measurement"] = "Hz"
                 payload["state_class"] = "measurement"
                 payload["value_template"] = value_template.replace(
-                    "}}", " | replace(' Hz','') | replace(' hz','') }}"
+                    "}}", " | replace(' Hz','') | replace(' hz','') | replace(' HZ','') }}"
                 )
 
             elif v_lower.endswith(" h") and section != "Statistik":
