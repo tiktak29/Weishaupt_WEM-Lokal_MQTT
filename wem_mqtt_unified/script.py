@@ -1598,13 +1598,17 @@ def publish_discovery(data_store):
                 or (
                     section == "Wärmepumpe"
                     and "frequenz verdichter" in key_lower
-                    and not v_lower.endswith(" rpm")
+                    and not any(
+                        part in key_lower
+                        for part in ("betriebsstd", "betriebsstunden", "schaltspiele")
+                    )
+                    and not v_lower.endswith((" rpm", " h"))
                 )
             ):
                 payload["unit_of_measurement"] = "Hz"
                 payload["state_class"] = "measurement"
                 payload["value_template"] = value_template.replace(
-                    "}}", " | replace(' Hz','') | replace(' hz','') | replace(' HZ','') }}"
+                    "}}", " | replace(' Hz','') | replace(' hz','') | replace(' HZ','') | replace(' hZ','') }}"
                 )
 
             elif v_lower.endswith(" h") and section != "Statistik":
