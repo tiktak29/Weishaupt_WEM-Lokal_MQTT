@@ -34,3 +34,15 @@ jobs:
         run: |
           python -m py_compile candidate/wem_mqtt_unified/script.py
           python -m py_compile baseline/wem_mqtt_unified/script.py
+      - name: Start isolated local MQTT broker (not user's Home Assistant)
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq mosquitto
+          printf 'listener 18883 127.0.0.1\\nallow_anonymous true\\npersistence false\\n' > /tmp/wem_mqtt_issue14.conf
+          mosquitto -c /tmp/wem_mqtt_issue14.conf -d
+          python -m pip install 'paho-mqtt>=2,<3'
+      - name: Test retained discovery upgrade with real local Mosquitto
+        env:
+          WEM_V112_SRC: ${{ github.workspace }}/baseline/wem_mqtt_unified/script.py
+          WEM_TEST_MQTT_PORT: '18883'
+        run: python -m unittest discover -s candidate/tests -p 'test_issue14_mqtt_broker.py' -v
