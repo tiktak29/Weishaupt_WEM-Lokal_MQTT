@@ -121,7 +121,16 @@ async def run_test():
             LOG.info("MQTT config flow initial result: %s %s", flow["type"], flow.get("step_id"))
             assert flow["type"] == "form" and flow.get("step_id") == "broker", flow
             configured_mqtt = await hass.config_entries.flow.async_configure(
-                flow["flow_id"], {"broker": HOST, "port": PORT}
+                flow["flow_id"], {
+                    "broker": HOST,
+                    "port": PORT,
+                    "protocol": "5",
+                    "other_settings": {
+                        "set_client_cert": False,
+                        "set_ca_cert": "off",
+                        "transport": "tcp",
+                    },
+                }
             )
             assert configured_mqtt["type"] == "create_entry", configured_mqtt
             await wait_for(lambda: [entry for entry in hass.config_entries.async_entries("mqtt")
