@@ -34,7 +34,7 @@ async def cold_start():
         with tempfile.TemporaryDirectory(prefix="wem_issue14_cold_") as temporary:
             config_dir = Path(temporary)
             (config_dir / "configuration.yaml").write_text(
-                "homeassistant:\\n  name: Issue 14 Cold Start\\n", encoding="utf-8"
+                "homeassistant:\n  name: Issue 14 Cold Start\n", encoding="utf-8"
             )
             hass = HomeAssistant(str(config_dir))
             loader.async_setup(hass)
