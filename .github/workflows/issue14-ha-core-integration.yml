@@ -13,7 +13,7 @@ permissions:
   contents: read
 jobs:
   home_assistant_mqtt_integration:
-    name: HA Core upgrade audit ${{ matrix.scenario }}
+    name: HA upgrade ${{ matrix.scenario }} / ${{ matrix.compressor }}
     runs-on: ubuntu-latest
     timeout-minutes: 25
     strategy:
@@ -24,6 +24,9 @@ jobs:
           - bad_state_first
           - normalized_config_first
           - normalized_state_first
+        compressor:
+          - '0 Hz'
+          - '45 Hz'
     steps:
       - name: Checkout candidate v1.1.3 development branch
         uses: actions/checkout@v4
@@ -63,6 +66,7 @@ jobs:
             -e WEM_V112_SRC=/baseline/wem_mqtt_unified/script.py \
             -e WEM_HA_TEST_MQTT_PORT=18884 \
             -e WEM_UPGRADE_SCENARIO=${{ matrix.scenario }} \
+            -e "WEM_INITIAL_COMPRESSOR=${{ matrix.compressor }}" \
             ghcr.io/home-assistant/home-assistant:2026.10.2 \
             /candidate/tests/test_issue14_ha_core.py
       - name: Check clean startup from retained v1.1.3 Discovery
