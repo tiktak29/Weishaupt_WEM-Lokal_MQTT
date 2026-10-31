@@ -5,6 +5,7 @@ Nothing connects to a real WebIF or Home Assistant instance.
 import json
 import os
 import threading
+import time
 import unittest
 from paho.mqtt import client as mqtt
 from jinja2 import Environment, StrictUndefined
@@ -76,6 +77,56 @@ class RealBrokerRetainedUpgradeTests(unittest.TestCase):
         self.assertTrue(retained)
         self.assertEqual(topic, "wem/wem_lokal_info")
         return json.loads(contents)
+
+    def test_real_qos1_reconnect_and_puback_before_clear(self):
+        data = {"Wärmepumpe": {
+            "Außengerät Variante": "WSB 6",
+            "Verdichter": "45 Hz",
+        }}
+        paho = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2)
+        old_client = self.new["mqtt_client"]
+        old_api = self.new["mqtt"]
+        self.new["mqtt_client"] = paho
+        self.new["mqtt"] = mqtt
+        pending = {"ticket": None, "last_attempt": 0.0}
+        try:
+            # Disconnected: no publish, no lost one-shot update.
+            self.assertIs(self.new["update_pending_verdichter_discovery"](
+                data, pending, "Wärmepumpe"
+            ), pending)
+            self.assertIsNone(pending["ticket"])
+
+            paho.connect(HOST, PORT, 5)
+            paho.loop_start()
+            try:
+                limit = time.monotonic() + 8
+                while not paho.is_connected() and time.monotonic() < limit:
+                    time.sleep(0.05)
+                self.assertTrue(paho.is_connected())
+                self.assertIs(self.new["update_pending_verdichter_discovery"](
+                    data, pending, "Wärmepumpe"
+                ), pending)
+                ticket = pending["ticket"]
+                self.assertIsNotNone(ticket)
+                self.assertEqual(ticket.rc, mqtt.MQTT_ERR_SUCCESS)
+                ticket.wait_for_publish(timeout=8)
+                self.assertTrue(ticket.is_published())
+                self.assertIsNone(self.new["update_pending_verdichter_discovery"](
+                    data, pending, "Wärmepumpe"
+                ))
+                topic, raw, retained = retained_message(
+                    "homeassistant/sensor/wem_lokal_wp_verdichter/config"
+                )
+                self.assertTrue(retained)
+                conf = json.loads(raw)
+                self.assertEqual(conf["unit_of_measurement"], "Hz")
+                self.assertEqual(conf["state_class"], "measurement")
+            finally:
+                paho.disconnect()
+                paho.loop_stop()
+        finally:
+            self.new["mqtt_client"] = old_client
+            self.new["mqtt"] = old_api
 
     def test_retained_discovery_upgrade_from_112_to_113(self):
         for key, first, next_value, base_unit, new_unit, expected in [

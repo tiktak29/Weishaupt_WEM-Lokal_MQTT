@@ -1632,15 +1632,17 @@ def publish_discovery(data_store, verdichter_only=False):
                 )
 
             elif (
-                v_lower.endswith(" hz")
-                or (
-                    section == "Wärmepumpe"
-                    and "frequenz verdichter" in key_lower
-                    and not any(
-                        part in key_lower
-                        for part in ("betriebsstd", "betriebsstunden", "schaltspiele")
+                section == "Wärmepumpe"
+                and (
+                    (key_lower == "verdichter" and verdichter_discovery_unit(v) == "Hz")
+                    or (
+                        "frequenz verdichter" in key_lower
+                        and not any(
+                            part in key_lower
+                            for part in ("betriebsstd", "betriebsstunden", "schaltspiele")
+                        )
+                        and not v_lower.endswith((" rpm", " h"))
                     )
-                    and not v_lower.endswith((" rpm", " h"))
                 )
             ):
                 payload["unit_of_measurement"] = "Hz"
@@ -1649,7 +1651,7 @@ def publish_discovery(data_store, verdichter_only=False):
                     "}}", " | replace(' Hz','') | replace(' hz','') | replace(' HZ','') | replace(' hZ','') }}"
                 )
 
-            elif v_lower.endswith(" h") and section != "Statistik":
+            elif " h" in v_lower and section != "Statistik":
                 payload["unit_of_measurement"] = "h"
                 payload["state_class"] = "total_increasing"
                 payload["value_template"] = value_template.replace("}}", " | replace(' h','') }}")
@@ -1671,25 +1673,56 @@ def publish_discovery(data_store, verdichter_only=False):
                 payload["state_class"] = "total_increasing"
 
             disc_topic = f"{MQTT_BASE}/sensor/{sensor_id}/config"
+            if verdichter_only:
+                # Confirm this one-time configuration update with MQTT QoS 1.
+                # Ordinary MQTT state and Discovery paths are unchanged (QoS 0).
+                return mqtt_client.publish(
+                    disc_topic, json.dumps(payload, ensure_ascii=False),
+                    qos=1, retain=True
+                )
             mqtt_publish(disc_topic, payload, retain=True)
 
 def update_pending_verdichter_discovery(data_store, pending, updated_section):
-    """Resolve a bare 'Verdichter = Aus' only on the next numeric WP poll.
+    """Retry the one-time Verdichter Discovery until MQTT QoS 1 PUBACK.
 
-    Does not scan WebIF, trigger extra fetches, or repeat general Discovery.
-    Returns False after a single targeted MQTT Discovery update.
+    Only runs after a normal WP poll; no extra WebIF requests or changes to
+    the ordinary MQTT publish path. If disconnected or unacknowledged, the
+    pending state remains active for a later poll.
     """
-    if (
-        pending
-        and updated_section == "Wärmepumpe"
-        and verdichter_discovery_unit(
-            data_store.get("Wärmepumpe", {}).get("Verdichter")
-        )
+    if pending is None or updated_section != "Wärmepumpe":
+        return pending
+    if not verdichter_discovery_unit(
+        data_store.get("Wärmepumpe", {}).get("Verdichter")
     ):
-        publish_discovery(data_store, verdichter_only=True)
-        return False
-    return pending
+        return pending
 
+    ticket = pending["ticket"]
+    if ticket is not None:
+        try:
+            if ticket.is_published():
+                return None
+        except (ValueError, RuntimeError):
+            pass
+        if time.monotonic() - pending["last_attempt"] < 30:
+            return pending
+
+    # A stopped MQTT connection cannot confirm a retained config.
+    if not mqtt_client.is_connected():
+        return pending
+
+    pending["last_attempt"] = time.monotonic()
+    try:
+        ticket = publish_discovery(data_store, verdichter_only=True)
+        if ticket is not None and ticket.rc == mqtt.MQTT_ERR_SUCCESS:
+            pending["ticket"] = ticket
+            if ticket.is_published():
+                return None
+        else:
+            pending["ticket"] = None
+    except (OSError, ValueError, RuntimeError) as exc:
+        logger.warning("Verdichter MQTT Discovery update deferred: %s", exc)
+        pending["ticket"] = None
+    return pending
 
 # ---------------------------
 # DAILY WEBIF REST
@@ -1827,7 +1860,7 @@ async def main():
 
     try:
         data_store = {}
-        verdichter_discovery_pending = False
+        verdichter_discovery_pending = None
         dynamic_urls_ready = False
         last_success = time.time()
         last_status = "offline"
@@ -2158,8 +2191,9 @@ async def main():
                         if all_devices_ready():
                             discovery_enabled = False
                             verdichter_discovery_pending = (
-                                str(data_store.get("Wärmepumpe", {}).get("Verdichter", ""))
-                                .strip().lower() == "aus"
+                                {"ticket": None, "last_attempt": 0.0}
+                                if str(data_store.get("Wärmepumpe", {}).get("Verdichter", ""))
+                                .strip().lower() == "aus" else None
                             )
 
                     # ---------------------------------------------------------

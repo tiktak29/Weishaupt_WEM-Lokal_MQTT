@@ -11,6 +11,9 @@ import os
 import pathlib
 import unittest
 import unicodedata
+import types
+import time
+import logging
 from jinja2 import Environment, StrictUndefined
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
@@ -41,7 +44,23 @@ def load_real_functions(path):
     events = []
     def mqtt_publish(topic, payload, retain=True):
         events.append((topic, copy.deepcopy(payload), retain))
-    ns = dict(TOPICS, unicodedata=unicodedata, mqtt_publish=mqtt_publish)
+    class ConfirmedReceipt:
+        rc = 0
+        def is_published(self):
+            return True
+    class FakeMqttClient:
+        def is_connected(self):
+            return True
+        def publish(self, topic, payload, qos=0, retain=True):
+            events.append((topic, json.loads(payload), retain))
+            return ConfirmedReceipt()
+    ns = dict(
+        TOPICS, json=json, unicodedata=unicodedata, mqtt_publish=mqtt_publish,
+        mqtt_client=FakeMqttClient(),
+        mqtt=types.SimpleNamespace(MQTT_ERR_SUCCESS=0),
+        logger=logging.getLogger("issue14_mock"),
+        time=time,
+    )
     exec(compile(ast.Module(body=methods, type_ignores=[]), str(path), "exec"), ns)
     return source, ns, events
 
@@ -103,7 +122,7 @@ class Issue14Tests(unittest.TestCase):
         original_initial = """        data_store = {}
         dynamic_urls_ready = False"""
         revised_initial = """        data_store = {}
-        verdichter_discovery_pending = False
+        verdichter_discovery_pending = None
         dynamic_urls_ready = False"""
         self.assertIn(original_initial, previous)
         expected = previous.replace(original_initial, revised_initial, 1)
@@ -136,8 +155,9 @@ class Issue14Tests(unittest.TestCase):
                         if all_devices_ready():
                             discovery_enabled = False
                             verdichter_discovery_pending = (
-                                str(data_store.get("Wärmepumpe", {}).get("Verdichter", ""))
-                                .strip().lower() == "aus"
+                                {"ticket": None, "last_attempt": 0.0}
+                                if str(data_store.get("Wärmepumpe", {}).get("Verdichter", ""))
+                                .strip().lower() == "aus" else None
                             )"""
         self.assertIn(original_poll, expected)
         expected = expected.replace(original_poll, revised_poll, 1)
@@ -296,16 +316,19 @@ class Issue14Tests(unittest.TestCase):
                     self.new["build_clean_data"](data)["Wärmepumpe"]["Verdichter"], "0"
                 )
                 self.new_events.clear()
-                self.assertTrue(self.new["update_pending_verdichter_discovery"](
-                    data, True, "Heizkreis 1"
-                ))
+                pending = {"ticket": None, "last_attempt": 0.0}
+                self.assertIs(
+                    self.new["update_pending_verdichter_discovery"](
+                        data, pending, "Heizkreis 1"
+                    ), pending
+                )
                 self.assertEqual(self.new_events, [])
                 data["Wärmepumpe"]["Verdichter"] = raw
                 self.assertEqual(
                     self.new["build_clean_data"](data)["Wärmepumpe"]["Verdichter"], number
                 )
-                self.assertFalse(self.new["update_pending_verdichter_discovery"](
-                    data, True, "Wärmepumpe"
+                self.assertIsNone(self.new["update_pending_verdichter_discovery"](
+                    data, pending, "Wärmepumpe"
                 ))
                 self.assertEqual(len(self.new_events), 1)
                 topic, config, retained = self.new_events[0]
@@ -313,8 +336,8 @@ class Issue14Tests(unittest.TestCase):
                 self.assertTrue(retained)
                 self.assertEqual(config.get("unit_of_measurement"), unit)
                 self.assertEqual(config.get("state_class"), "measurement")
-                self.assertFalse(self.new["update_pending_verdichter_discovery"](
-                    data, False, "Wärmepumpe"
+                self.assertIsNone(self.new["update_pending_verdichter_discovery"](
+                    data, None, "Wärmepumpe"
                 ))
                 self.assertEqual(len(self.new_events), 1)
 
@@ -325,9 +348,10 @@ class Issue14Tests(unittest.TestCase):
             with self.subTest(raw=raw):
                 data["Wärmepumpe"]["Verdichter"] = raw
                 self.new_events.clear()
-                self.assertTrue(self.new["update_pending_verdichter_discovery"](
-                    data, True, "Wärmepumpe"
-                ))
+                pending = {"ticket": None, "last_attempt": 0.0}
+                self.assertIs(self.new["update_pending_verdichter_discovery"](
+                    data, pending, "Wärmepumpe"
+                ), pending)
                 self.assertEqual(self.new_events, [])
 
     def test_known_limitations_remain_documented(self):

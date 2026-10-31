@@ -74,6 +74,7 @@ async def cold_start():
                     "Ist Frequenz Verdichter": ("Hz", "43", "measurement"),
                     "Drehzahl Pumpe M1": ("%", "55", "measurement"),
                     "Betriebsstd. Verdichter": ("h", "4388", "total_increasing"),
+                    "Vorlauftemperatur": ("°C", "35", "measurement"),
                 }
                 for key, (unit, value, state_class) in expected.items():
                     await testcore.wait_for(

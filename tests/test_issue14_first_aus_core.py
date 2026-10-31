@@ -157,8 +157,9 @@ async def main():
                     # only the late bare Verdichter is republished, once,
                     # using the exact helper called from main().
                     LOG.info("DELAYED_TARGETED_DISCOVERY: normal main() pending path")
+                    pending = {"ticket": None, "last_attempt": 0.0}
                     pending = ns["update_pending_verdichter_discovery"](
-                        payload(NEXT_RAW), True, "Heizkreis 1"
+                        payload(NEXT_RAW), pending, "Heizkreis 1"
                     )
                     assert pending, "Non-Wärmepumpe poll must not resolve pending"
                     events.clear()
@@ -169,6 +170,13 @@ async def main():
                     assert len(events) == 1, f"Expected exactly one targeted Discovery: {events}"
                     assert events[0][0] == CONFIG_TOPIC
                     await helpers.send(list(events))
+                    before_follow_up = len(events)
+                    # Once the PUBACK is confirmed, the pending discovery is
+                    # complete. No further config is generated on later polls.
+                    assert ns["update_pending_verdichter_discovery"](
+                        payload(NEXT_RAW), pending, "Wärmepumpe"
+                    ) is None
+                    assert len(events) == before_follow_up
                     # A second routine polling round must not re-publish
                     # any Discovery configuration or create duplicate entities.
                     await asyncio.sleep(0.3)

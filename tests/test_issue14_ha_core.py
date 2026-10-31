@@ -37,6 +37,7 @@ INITIAL = {
     "Ist Frequenz Verdichter": "Aus",
     "Drehzahl Pumpe M1": "55 %",
     "Betriebsstd. Verdichter": "4388 h",
+    "Vorlauftemperatur": "35 °C",
 }
 INITIAL_COMPRESSOR = os.environ.get("WEM_INITIAL_COMPRESSOR", "0 Hz")
 assert INITIAL_COMPRESSOR in ("0 Hz", "45 Hz")
@@ -50,7 +51,8 @@ RUNNING = {
     "Ist Frequenz Verdichter": "43 hZ",
 }
 KEYS = ["Verdichter", "Soll Frequenz Verdichter", "Ist Frequenz Verdichter",
-        "Drehzahl Pumpe M1", "Betriebsstd. Verdichter"]
+        "Drehzahl Pumpe M1", "Betriebsstd. Verdichter",
+        "Vorlauftemperatur"]
 
 
 def publish_now(packets):
@@ -163,6 +165,9 @@ async def run_test():
                            "v1.1.2 unchanged pump speed", 40)
             await wait_for(lambda: require_state(hass, old_ids["Betriebsstd. Verdichter"], "h", value="4388"),
                            "v1.1.2 unchanged operating hours", 40)
+            await wait_for(lambda: require_state(hass, old_ids["Vorlauftemperatur"],
+                                                 "°C", value="35"),
+                           "v1.1.2 unchanged temperature sensor", 40)
             LOG.info("Baseline v1.1.2 Discovery was processed by Home Assistant")
 
             # Positive control: repair ONLY the simulated old sensor's MQTT
@@ -229,6 +234,7 @@ async def run_test():
                 "Ist Frequenz Verdichter": ("Hz", "0"),
                 "Drehzahl Pumpe M1": ("%", "55"),
                 "Betriebsstd. Verdichter": ("h", "4388"),
+                "Vorlauftemperatur": ("°C", "35"),
             }
             for key, (unit, state) in expected.items():
                 await wait_for(
