@@ -38,6 +38,11 @@ INITIAL = {
     "Drehzahl Pumpe M1": "55 %",
     "Betriebsstd. Verdichter": "4388 h",
 }
+INITIAL_COMPRESSOR = os.environ.get("WEM_INITIAL_COMPRESSOR", "0 Hz")
+assert INITIAL_COMPRESSOR in ("0 Hz", "45 Hz")
+INITIAL["Verdichter"] = INITIAL_COMPRESSOR
+INITIAL_EXPECTED_NUMERIC = INITIAL_COMPRESSOR.removesuffix(" Hz")
+
 RUNNING = {
     **INITIAL,
     "Verdichter": "45 Hz",
@@ -219,7 +224,7 @@ async def run_test():
                 await asyncio.sleep(0.35)
                 await send(next_state)
             expected = {
-                "Verdichter": ("Hz", "0"),
+                "Verdichter": ("Hz", INITIAL_EXPECTED_NUMERIC),
                 "Soll Frequenz Verdichter": ("Hz", "0"),
                 "Ist Frequenz Verdichter": ("Hz", "0"),
                 "Drehzahl Pumpe M1": ("%", "55"),
@@ -267,14 +272,15 @@ async def run_test():
             # should still reproduce the exception, but state-first must
             # now be free of unhandled exceptions.
             if UPGRADE_SCENARIO == "bad_config_first":
-                assert any("non-numeric value: '0 Hz'" in error for error in errors), (
+                expected_text = f"non-numeric value: '{INITIAL_COMPRESSOR}'"
+                assert any(expected_text in error for error in errors), (
                     "Expected to reproduce the stale invalid MQTT state upgrade "
                     f"error, but got: {errors}"
                 )
                 LOG.warning(
-                    "CONFIRMED: Upgrade with stale 0 Hz provokes unhandled "
+                    "CONFIRMED: Upgrade with stale %s provokes unhandled "
                     "Home Assistant exception in scenario %s",
-                    UPGRADE_SCENARIO,
+                    INITIAL_COMPRESSOR, UPGRADE_SCENARIO,
                 )
             else:
                 assert not errors, (
