@@ -251,7 +251,7 @@ logging.basicConfig(
     datefmt="%Y-%m-%d %H:%M:%S"
 )
 logger = logging.getLogger("wem_mqtt_unified")
-logger.info("🚀 Starting Weishaupt WEM-Lokal MQTT v1.1.2")
+logger.info("🚀 Starting Weishaupt WEM-Lokal MQTT v1.1.3")
 try:
     signal.signal(signal.SIGTERM, signal_handler)
 except Exception:
@@ -1593,7 +1593,14 @@ def publish_discovery(data_store):
                     "}}", " | replace('m3/h','') | replace('m³/h','') }}"
                 )
 
-            elif " h" in v_lower and section != "Statistik":
+            elif v_lower.endswith(" hz"):
+                payload["unit_of_measurement"] = "Hz"
+                payload["state_class"] = "measurement"
+                payload["value_template"] = value_template.replace(
+                    "}}", " | replace(' Hz','') | replace(' hz','') }}"
+                )
+
+            elif v_lower.endswith(" h") and section != "Statistik":
                 payload["unit_of_measurement"] = "h"
                 payload["state_class"] = "total_increasing"
                 payload["value_template"] = value_template.replace("}}", " | replace(' h','') }}")
