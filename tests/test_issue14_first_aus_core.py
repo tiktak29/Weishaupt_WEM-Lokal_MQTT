@@ -153,7 +153,27 @@ async def main():
                     await asyncio.sleep(0.3)
                     await publish_state(NEXT_RAW)
                 else:
-                    LOG.info("NO_REDISCOVERY: simulating discovery_enabled=False")
+                    # Simulate main() after its normal discovery_enabled=False:
+                    # only the late bare Verdichter is republished, once,
+                    # using the exact helper called from main().
+                    LOG.info("DELAYED_TARGETED_DISCOVERY: normal main() pending path")
+                    pending = ns["update_pending_verdichter_discovery"](
+                        payload(NEXT_RAW), True, "Heizkreis 1"
+                    )
+                    assert pending, "Non-Wärmepumpe poll must not resolve pending"
+                    events.clear()
+                    pending = ns["update_pending_verdichter_discovery"](
+                        payload(NEXT_RAW), pending, "Wärmepumpe"
+                    )
+                    assert not pending, "First numeric compressor poll should resolve pending"
+                    assert len(events) == 1, f"Expected exactly one targeted Discovery: {events}"
+                    assert events[0][0] == CONFIG_TOPIC
+                    await helpers.send(list(events))
+                    # A second routine polling round must not re-publish
+                    # any Discovery configuration or create duplicate entities.
+                    await asyncio.sleep(0.3)
+                    # Next normal poll after config has been delivered.
+                    await publish_state(NEXT_RAW)
 
                 await helpers.wait_for(
                     lambda: hass.states.get(first_entity)
