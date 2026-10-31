@@ -71,7 +71,10 @@ class Issue14Tests(unittest.TestCase):
     def test_other_functions_unmodified(self):
         def other_ast(src):
             tree = ast.parse(src)
-            tree.body = [x for x in tree.body if not (isinstance(x, ast.FunctionDef) and x.name == "publish_discovery")]
+            tree.body = [x for x in tree.body if not (
+                isinstance(x, ast.FunctionDef)
+                and x.name in ("publish_discovery", "build_clean_data")
+            )]
             # Known startup version update is intentionally allowed.
             for x in ast.walk(tree):
                 if isinstance(x, ast.Constant) and isinstance(x.value, str):
@@ -160,6 +163,48 @@ class Issue14Tests(unittest.TestCase):
                 retained = {self.old_events[-1][0]: old}
                 retained[self.new_events[-1][0]] = new  # offline retained-message replacement
                 self.assertEqual(retained[self.new_events[-1][0]], new)
+
+    def test_only_bare_compressor_hz_mqtt_state_is_normalized(self):
+        # The old v1.1.2 wrong "h" sensor accepts numeric state before
+        # upgraded Discovery, and the new Hz sensor also accepts it.
+        cases = [
+            ("0 Hz", "0"), ("45 Hz", "45"),
+            ("62 hZ", "62"), ("59 HZ", "59"),
+            ("45,5 Hz", "45.5"), ("Aus", "0"),
+            ("2500 rpm", "2500 rpm"), ("0 rpm", "0 rpm"),
+        ]
+        for raw, expected in cases:
+            with self.subTest(value=raw):
+                state = self.new["build_clean_data"](
+                    {"Wärmepumpe": {"Verdichter": raw}}
+                )["Wärmepumpe"]["Verdichter"]
+                self.assertEqual(state, expected)
+
+        # Explicitly unchanged values in other sections and keys.
+        for section, key, value in [
+            ("Wärmepumpe", "Ist Frequenz Verdichter", "45 Hz"),
+            ("Wärmepumpe", "Soll Frequenz Verdichter", "45 hZ"),
+            ("Heizkreis 1", "Verdichter", "45 Hz"),
+            ("Wärmepumpe", "Verdichterstatus", "45 Hz"),
+            ("Wärmepumpe", "Betriebsstd. Verdichter", "4400 h"),
+            ("Wärmepumpe", "Verdichter", "Aus"),
+            ("Wärmepumpe", "Verdichter", "2000 rpm"),
+        ]:
+            with self.subTest(section=section, key=key, value=value):
+                data = {section: {key: value}}
+                self.assertEqual(
+                    self.old["build_clean_data"](data),
+                    self.new["build_clean_data"](data),
+                )
+
+        old = self.old["build_clean_data"](
+            {"Wärmepumpe": {"Verdichter": "45 Hz"}}
+        )["Wärmepumpe"]["Verdichter"]
+        new = self.new["build_clean_data"](
+            {"Wärmepumpe": {"Verdichter": "45 Hz"}}
+        )["Wärmepumpe"]["Verdichter"]
+        self.assertEqual(old, "45 Hz")
+        self.assertEqual(new, "45")
 
     def test_known_limitations_remain_documented(self):
         p = get_discovery(self.new, self.new_events, "Wärmepumpe", "Verdichter", "Aus")

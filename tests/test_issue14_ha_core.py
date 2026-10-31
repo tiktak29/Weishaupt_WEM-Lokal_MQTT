@@ -261,10 +261,12 @@ async def run_test():
                       for context in unhandled]
             LOG.info("UPGRADE_EXCEPTION_AUDIT scenario=%s count=%d details=%s",
                      UPGRADE_SCENARIO, len(errors), errors)
-            # A state-first upgrade reintroduces '0 Hz' under the old
-            # v1.1.2 template, even if an earlier numeric state was valid.
-            # Only normalized_config_first avoids that stale invalid value.
-            if UPGRADE_SCENARIO != "normalized_config_first":
+            # The experimental code emits numeric bare Verdichter Hz
+            # in MQTT_STATE_TOPIC before Discovery during startup.
+            # The deliberately impossible config-first stale-value control
+            # should still reproduce the exception, but state-first must
+            # now be free of unhandled exceptions.
+            if UPGRADE_SCENARIO == "bad_config_first":
                 assert any("non-numeric value: '0 Hz'" in error for error in errors), (
                     "Expected to reproduce the stale invalid MQTT state upgrade "
                     f"error, but got: {errors}"
@@ -280,8 +282,8 @@ async def run_test():
                     f"the old MQTT state first: {errors}"
                 )
                 LOG.info(
-                    "CONTROL PASS: Normalized old numeric state avoids unhandled "
-                    "exception in scenario %s", UPGRADE_SCENARIO
+                    "SAFE UPGRADE PASS: no unhandled exception in scenario %s",
+                    UPGRADE_SCENARIO,
                 )
             LOG.info("SCENARIO COMPLETE: HA entity states correct; exceptions explicitly audited")
         finally:

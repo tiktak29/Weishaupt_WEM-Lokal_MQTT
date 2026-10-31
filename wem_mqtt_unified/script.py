@@ -463,6 +463,17 @@ def build_clean_data(data_store):
             elif value.lower() == "ein":
                 clean_vals[k] = "1"
 
+            # Issue #14 upgrade compatibility: the legacy v1.1.2 sensor
+            # "Verdichter" may still have the incorrect unit "h" in HA.
+            # Emit the Hz measurement as a numeric MQTT state *before*
+            # corrected Discovery is published. The rpm path is unchanged.
+            elif (
+                section == "Wärmepumpe"
+                and k.lower() == "verdichter"
+                and value.lower().endswith(" hz")
+            ):
+                clean_vals[k] = value[:-3].strip().replace(",", ".")
+
             else:
                 # Allgemeine Bereinigung
                 clean_vals[k] = (
