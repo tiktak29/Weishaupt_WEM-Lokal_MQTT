@@ -19,20 +19,6 @@ Local data extraction from Weishaupt heat pumps via the integrated Weishaupt WEM
 >
 > The app configuration and schema, WebIF communication, polling and recovery behavior remain unchanged. Use the normal Home Assistant app update; no uninstall or reconfiguration is required.
 
-> ℹ️ **Updating from v1.1.1 to v1.1.2**
->
-> This patch recognizes an unnumbered `Heizkreis` WebIF entry as the existing `Heizkreis 1` device
-> when no numbered heating circuits are present. No configuration/schema changes are required.
-> Use the normal Home Assistant app update.
-
-> ℹ️ **Updating from v1.1.0 to v1.1.1**
->
-> The configuration options and schema are unchanged. Use the normal Home Assistant app update; no uninstall or reconfiguration is required for this update.
->
-> The first start after updating from v1.1.0 establishes and validates a new WebIF session because v1.1.0 did not save session cookies. Subsequent restarts and updates can reuse the saved session after validation.
->
-> Keep the app's data when updating. Uninstalling removes the saved session and requires a fresh login on the next installation.
-
 > ⚠️ **Legacy migration from v1.0.x**
 >
 > Version 1.1.0 introduced fully automatic WebIF detection and removed the manual HEX code and device-enable options.
