@@ -1,5 +1,30 @@
 # Changelog
 
+## v1.1.3 – Fix: Compressor Sensor MQTT Discovery (Hz)
+
+### Changes
+
+* Fix MQTT Discovery for compressor (`Verdichter`) readings such as `0 Hz`: use the correct `Hz` unit and `measurement` state class instead of incorrectly identifying operating hours (`h`, `total_increasing`).
+* Publish numeric compressor values without the `Hz` or `rpm` suffix in the shared `wem/wem_lokal_info` MQTT state. Home Assistant continues to display the appropriate unit through MQTT Discovery, including `rpm` on existing rpm systems.
+* Support a first compressor value of `Aus`: when a subsequent numeric Hz/rpm reading identifies the unit, correct only the compressor's retained MQTT Discovery configuration. Keep its existing entity identifier and confirm the targeted update with MQTT QoS 1, retrying if not acknowledged.
+* Preserve the existing WebIF communication, device detection, polling, Round-Robin, login, session and recovery behavior. Other sensors and their existing MQTT handling remain unchanged.
+
+### Upgrade notes
+
+* Normal Home Assistant app update from v1.1.2. Configuration options and schema are unchanged; no uninstall or reconfiguration is required.
+* Custom scripts or automations that read the raw `Verdichter` field directly from `wem/wem_lokal_info` may need to account for the numeric-only value.
+
+## v1.1.2 – Fix: Single Heating Circuit Detection
+
+### Changes
+
+* Recognize the unnumbered `Heizkreis` entry in the WebIF Info menu when none of `Heizkreis 1`–`Heizkreis 4` exists. Map it internally to the existing `Heizkreis 1` device.
+* Preserve existing numbered heating-circuit detection, MQTT identifiers, and the existing Round-Robin, HTML parser, login, session and recovery implementation.
+
+### Upgrade notes
+
+* Normal Home Assistant update from v1.1.1; configuration options and schema are unchanged.
+
 ## v1.1.1 – Persistent WebIF Sessions & Recovery
 
 ### Upgrade notes
