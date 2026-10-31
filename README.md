@@ -247,7 +247,7 @@ The WebIF structure, data URLs and available devices are detected automatically 
 ## Startup Log
 
 There are two normal startup paths. The examples below omit the timestamp and logger prefix for readability.
-The measured times come from earlier real tests and remain illustrative, not guaranteed startup durations. The version banners have been updated to v1.1.3; no new timing measurements are implied.
+The measured times come from earlier real tests and remain illustrative, not guaranteed startup durations.
 
 ### First installation / no saved session
 
