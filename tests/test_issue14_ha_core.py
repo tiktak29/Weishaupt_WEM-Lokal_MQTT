@@ -255,7 +255,10 @@ async def run_test():
                       for context in unhandled]
             LOG.info("UPGRADE_EXCEPTION_AUDIT scenario=%s count=%d details=%s",
                      UPGRADE_SCENARIO, len(errors), errors)
-            if UPGRADE_SCENARIO.startswith("bad_"):
+            # A state-first upgrade reintroduces '0 Hz' under the old
+            # v1.1.2 template, even if an earlier numeric state was valid.
+            # Only normalized_config_first avoids that stale invalid value.
+            if UPGRADE_SCENARIO != "normalized_config_first":
                 assert any("non-numeric value: '0 Hz'" in error for error in errors), (
                     "Expected to reproduce the stale invalid MQTT state upgrade "
                     f"error, but got: {errors}"
