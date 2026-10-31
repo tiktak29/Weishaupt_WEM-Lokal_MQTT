@@ -2,7 +2,7 @@ name: Issue 14 - strict release blockers audit
 on:
   push:
     branches:
-      - issue-14-hz-discovery-v1.1.3
+      - fix/issue-14-verdichter-hz-v1.1.3
     paths:
       - tests/test_issue14_release_audit.py
       - .github/workflows/issue14-release-audit.yml

@@ -2,7 +2,7 @@ name: Issue 14 First Aus - Hz and rpm discovery verification
 on:
   push:
     branches:
-      - issue-14-hz-discovery-v1.1.3
+      - fix/issue-14-verdichter-hz-v1.1.3
     paths:
       - tests/test_issue14_first_aus_core.py
       - .github/workflows/issue14-first-aus.yml
