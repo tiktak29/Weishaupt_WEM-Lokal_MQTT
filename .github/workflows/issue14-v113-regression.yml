@@ -38,9 +38,14 @@ jobs:
         run: |
           sudo apt-get update -qq
           sudo apt-get install -y -qq mosquitto
-          printf '%s\\n' 'listener 18883 127.0.0.1' 'allow_anonymous true' 'persistence false' | sudo tee /etc/mosquitto/conf.d/wem_issue14.conf >/dev/null
+          echo 'listener 18883 127.0.0.1' | sudo tee /etc/mosquitto/conf.d/wem_issue14.conf >/dev/null
+          echo 'allow_anonymous true' | sudo tee -a /etc/mosquitto/conf.d/wem_issue14.conf >/dev/null
+          echo 'persistence false' | sudo tee -a /etc/mosquitto/conf.d/wem_issue14.conf >/dev/null
           sudo chmod 644 /etc/mosquitto/conf.d/wem_issue14.conf
+          sudo cat /etc/mosquitto/conf.d/wem_issue14.conf
           sudo mosquitto -c /etc/mosquitto/conf.d/wem_issue14.conf -d
+          sleep 2
+          python -c "import socket; s=socket.create_connection(('127.0.0.1',18883),5); s.close(); print('Local MQTT port ready')"
           python -m pip install 'paho-mqtt>=2,<3'
       - name: Test retained discovery upgrade with real local Mosquitto
         env:
