@@ -207,6 +207,12 @@ async def run_test():
                 await send(next_state)
                 await asyncio.sleep(0.35)
                 await send(next_discovery)
+                # In the real app the following regular polling cycle
+                # publishes the next state AFTER corrected Discovery.
+                # Without this, the original (unconvertible) v1.1.2
+                # native value may remain cached indefinitely in the test.
+                await asyncio.sleep(0.35)
+                await send(next_state)
             else:
                 LOG.info("Upgrade order: Discovery BEFORE state (control)")
                 await send(next_discovery)
