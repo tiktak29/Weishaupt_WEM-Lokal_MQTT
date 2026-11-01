@@ -1,6 +1,6 @@
 # Weishaupt WEM-Lokal MQTT
 
-![Version](https://img.shields.io/badge/version-v1.1.2-blue)
+![Version](https://img.shields.io/badge/version-v1.1.3-blue)
 ![Home Assistant](https://img.shields.io/badge/Home%20Assistant-App-green)
 ![MQTT](https://img.shields.io/badge/MQTT-Discovery-orange)
 ![License](https://img.shields.io/badge/license-MIT-brightgreen)
@@ -11,27 +11,19 @@ Local data extraction from Weishaupt heat pumps via the integrated Weishaupt WEM
 
 ---
 
-> ℹ️ **Updating from v1.1.1 to v1.1.2**
+> ℹ️ **Updating from v1.1.2 to v1.1.3**
 >
-> This patch recognizes an unnumbered `Heizkreis` WebIF entry as the existing `Heizkreis 1` device
-> when no numbered heating circuits are present. No configuration/schema changes are required.
-> Use the normal Home Assistant app update.
-
-> ℹ️ **Updating from v1.1.0 to v1.1.1**
+> This patch fixes MQTT Discovery for the compressor sensor (`Verdichter`) when the WebIF reports a frequency in Hz. An initial `Aus` state is supported; once a numeric `Hz` or `rpm` value is available, the appropriate unit is identified and the sensor's Discovery configuration is updated if necessary.
 >
-> The configuration options and schema are unchanged. Use the normal Home Assistant app update; no uninstall or reconfiguration is required for this update.
+> The Home Assistant sensor retains its existing entity ID. Compressor values reported in rpm continue to be displayed with the unit `rpm` in Home Assistant. For both Hz and rpm, the app now publishes the numeric compressor value **without the unit suffix** in the `wem/wem_lokal_info` MQTT state payload. Custom consumers that parse the raw `Verdichter` string may need to adjust.
 >
-> The first start after updating from v1.1.0 establishes and validates a new WebIF session because v1.1.0 did not save session cookies. Subsequent restarts and updates can reuse the saved session after validation.
->
-> Keep the app's data when updating. Uninstalling removes the saved session and requires a fresh login on the next installation.
+> The app configuration and schema, WebIF communication, polling and recovery behavior remain unchanged. Use the normal Home Assistant app update; no uninstall or reconfiguration is required.
 
 > ⚠️ **Legacy migration from v1.0.x**
 >
 > Version 1.1.0 introduced fully automatic WebIF detection and removed the manual HEX code and device-enable options.
 >
 > Obsolete v1.0.x options may remain stored and generate Supervisor warnings. If these old options are still present, note your WebIF and MQTT settings before uninstalling and reinstalling the current app to remove them.
->
-> This legacy cleanup does not apply to a normal v1.1.0 → v1.1.1 update.
 
 ---
 
@@ -253,14 +245,14 @@ The WebIF structure, data URLs and available devices are detected automatically 
 ## Startup Log
 
 There are two normal startup paths. The examples below omit the timestamp and logger prefix for readability.
-The measured times are real test examples, not guaranteed startup durations.
+The measured times come from earlier real tests and remain illustrative, not guaranteed startup durations.
 
 ### First installation / no saved session
 
 When no usable saved session is available, the app establishes a new login and validates it on a protected WebIF page:
 
 ```text
-🚀 Starting Weishaupt WEM-Lokal MQTT v1.1.1
+🚀 Starting Weishaupt WEM-Lokal MQTT v1.1.3
 ✔️ MQTT connected
 ℹ️ Establishing WebIF session – this may take up to 5 minutes
 ✅ WebIF session validated in 60.4 s
@@ -289,7 +281,7 @@ If setup fails within the configured five-minute window, the app logs:
 The app loads the saved session and validates it on a protected WebIF page before considering a new login:
 
 ```text
-🚀 Starting Weishaupt WEM-Lokal MQTT v1.1.1
+🚀 Starting Weishaupt WEM-Lokal MQTT v1.1.3
 ✔️ MQTT connected
 ℹ️ Checking existing WebIF session
 ✅ Existing WebIF session validated in 0.8 s

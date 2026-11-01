@@ -1,0 +1,364 @@
+"""Isolated regression tests. The real v1.1.2/v1.1.3 Python functions
+are extracted from source by ast and executed with a mocked MQTT publisher.
+No WebIF, network, heat pump, or live Home Assistant is contacted.
+Run: python -m unittest discover -s tests -p 'test_issue14_v113.py' -v
+Set WEM_V112_SRC to the path of the baseline script (checked out tag v1.1.2).
+"""
+import ast
+import copy
+import json
+import os
+import pathlib
+import unittest
+import unicodedata
+import types
+import time
+import logging
+from jinja2 import Environment, StrictUndefined
+
+ROOT = pathlib.Path(__file__).resolve().parents[1]
+OLD = pathlib.Path(os.environ.get("WEM_V112_SRC", ROOT / "_baseline_v112" / "wem_mqtt_unified" / "script.py"))
+NEW = ROOT / "wem_mqtt_unified" / "script.py"
+JINJA = Environment(undefined=StrictUndefined)
+FUNCTIONS = (
+    "normalize_id", "build_clean_data", "publish_discovery",
+    "verdichter_discovery_unit", "update_pending_verdichter_discovery",
+)
+REQUIRED = {"normalize_id", "build_clean_data", "publish_discovery"}
+TOPICS = {
+    "MQTT_BASE": "homeassistant",
+    "MQTT_STATE_TOPIC": "wem/wem_lokal_info",
+    "AVAILABILITY_TOPIC": "wem/availability",
+    "SYSTEM_STATUS_TOPIC": "wem/system_status",
+    "LAST_UPDATE_TOPIC": "wem/last_update",
+    "DAILY_SUCCESS_TOPIC": "wem/daily_success",
+    "DAILY_SUCCESS_ATTR_TOPIC": "wem/daily_success_attributes",
+}
+
+def load_real_functions(path):
+    source = path.read_text(encoding="utf-8")
+    tree = ast.parse(source, filename=str(path))
+    methods = [node for node in tree.body if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)) and node.name in FUNCTIONS]
+    if not REQUIRED.issubset({x.name for x in methods}):
+        raise AssertionError(f"Missing required functions in {path}")
+    events = []
+    def mqtt_publish(topic, payload, retain=True):
+        events.append((topic, copy.deepcopy(payload), retain))
+    class ConfirmedReceipt:
+        rc = 0
+        def is_published(self):
+            return True
+    class FakeMqttClient:
+        def is_connected(self):
+            return True
+        def publish(self, topic, payload, qos=0, retain=True):
+            events.append((topic, json.loads(payload), retain))
+            return ConfirmedReceipt()
+    ns = dict(
+        TOPICS, json=json, unicodedata=unicodedata, mqtt_publish=mqtt_publish,
+        mqtt_client=FakeMqttClient(),
+        mqtt=types.SimpleNamespace(MQTT_ERR_SUCCESS=0),
+        logger=logging.getLogger("issue14_mock"),
+        time=time,
+    )
+    exec(compile(ast.Module(body=methods, type_ignores=[]), str(path), "exec"), ns)
+    return source, ns, events
+
+def get_discovery(ns, events, section, key, initial):
+    events.clear()
+    ns["publish_discovery"]({section: {key: initial}})
+    matching = [
+        item[1] for item in events
+        if item[0].endswith("/config")
+        and isinstance(item[1], dict)
+        and item[1].get("name") == key
+    ]
+    if len(matching) != 1:
+        raise AssertionError((section, key, initial, len(matching)))
+    return matching[0]
+
+def render_state(ns, payload, section, key, raw):
+    state = ns["build_clean_data"]({section: {key: raw}})
+    return JINJA.from_string(payload["value_template"]).render(value_json={"WEM-Lokal Info": state})
+
+class Issue14Tests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.oldsrc, cls.old, cls.old_events = load_real_functions(OLD)
+        cls.newsrc, cls.new, cls.new_events = load_real_functions(NEW)
+
+    def test_python_source_compiles(self):
+        compile(self.oldsrc, str(OLD), "exec")
+        compile(self.newsrc, str(NEW), "exec")
+
+    def test_other_functions_unmodified(self):
+        def other_ast(src):
+            tree = ast.parse(src)
+            tree.body = [x for x in tree.body if not (
+                isinstance(x, (ast.FunctionDef, ast.AsyncFunctionDef))
+                and x.name in (
+                    "publish_discovery", "build_clean_data",
+                    "verdichter_discovery_unit",
+                    "update_pending_verdichter_discovery", "main"
+                )
+            )]
+            # Known startup version update is intentionally allowed.
+            for x in ast.walk(tree):
+                if isinstance(x, ast.Constant) and isinstance(x.value, str):
+                    x.value = x.value.replace("Starting Weishaupt WEM-Lokal MQTT v1.1.3", "Starting Weishaupt WEM-Lokal MQTT v1.1.2")
+            return ast.dump(tree, include_attributes=False)
+        self.assertEqual(other_ast(self.oldsrc), other_ast(self.newsrc))
+
+    def test_main_changes_are_exactly_the_approved_pending_logic(self):
+        def source_main(src):
+            nodes = ast.parse(src).body
+            main = next(n for n in nodes
+                        if isinstance(n, ast.AsyncFunctionDef) and n.name == "main")
+            return ast.get_source_segment(src, main)
+
+        previous = source_main(self.oldsrc)
+        current = source_main(self.newsrc)
+
+        original_initial = """        data_store = {}
+        dynamic_urls_ready = False"""
+        revised_initial = """        data_store = {}
+        verdichter_discovery_pending = None
+        dynamic_urls_ready = False"""
+        self.assertIn(original_initial, previous)
+        expected = previous.replace(original_initial, revised_initial, 1)
+
+        original_poll = """                    mqtt_publish(
+                        MQTT_STATE_TOPIC,
+                        {"WEM-Lokal Info": build_clean_data(data_store)}
+                    )
+
+                    if discovery_enabled:
+                        publish_discovery(data_store)
+
+                        if all_devices_ready():
+                            discovery_enabled = False"""
+        revised_poll = """                    mqtt_publish(
+                        MQTT_STATE_TOPIC,
+                        {"WEM-Lokal Info": build_clean_data(data_store)}
+                    )
+
+                    # The actual MQTT state is sent FIRST, so a late Hz/rpm
+                    # correction never sees an old nonnumeric value in HA.
+                    if not discovery_enabled and verdichter_discovery_pending:
+                        verdichter_discovery_pending = update_pending_verdichter_discovery(
+                            data_store, verdichter_discovery_pending, name
+                        )
+
+                    if discovery_enabled:
+                        publish_discovery(data_store)
+
+                        if all_devices_ready():
+                            discovery_enabled = False
+                            verdichter_discovery_pending = (
+                                {"ticket": None, "last_attempt": 0.0}
+                                if str(data_store.get("Wärmepumpe", {}).get("Verdichter", ""))
+                                .strip().lower() == "aus" else None
+                            )"""
+        self.assertIn(original_poll, expected)
+        expected = expected.replace(original_poll, revised_poll, 1)
+        self.assertEqual(current, expected)
+
+    def test_issue14_bug_reproduced_and_fixed(self):
+        old = get_discovery(self.old, self.old_events, "Wärmepumpe", "Verdichter", "0 Hz")
+        new = get_discovery(self.new, self.new_events, "Wärmepumpe", "Verdichter", "0 Hz")
+        self.assertEqual((old["unit_of_measurement"], old["state_class"]), ("h", "total_increasing"))
+        self.assertEqual((new["unit_of_measurement"], new["state_class"]), ("Hz", "measurement"))
+        self.assertEqual(render_state(self.new, new, "Wärmepumpe", "Verdichter", "45 Hz"), "45")
+        self.assertEqual(render_state(self.new, new, "Wärmepumpe", "Verdichter", "Aus"), "0")
+
+    def test_named_compressor_frequency_off_first(self):
+        for key in ["Soll Frequenz Verdichter", "Ist Frequenz Verdichter",
+                    "Test Ist Frequenz Verdichter Zusatz", "FREQUENZ VERDICHTER"]:
+            with self.subTest(name=key):
+                new = get_discovery(self.new, self.new_events, "Wärmepumpe", key, "Aus")
+                self.assertEqual(new["unit_of_measurement"], "Hz")
+                self.assertEqual(new["state_class"], "measurement")
+                for raw, expected in [("Aus", "0"), ("0 Hz", "0"), ("55 Hz", "55"),
+                                      ("45 hz", "45"), ("45 HZ", "45"), ("45 hZ", "45"), ("45,5 Hz", "45.5")]:
+                    with self.subTest(raw=raw):
+                        self.assertEqual(render_state(self.new, new, "Wärmepumpe", key, raw), expected)
+
+    def test_no_false_positive_for_counters(self):
+        cases = [
+            ("Betriebsstd. Frequenz Verdichter", "7702 h", "h", "total_increasing"),
+            ("Betriebsstd. Frequenz Verdichter", "Aus", None, None),
+            ("Betriebsstunden Frequenz Verdichter", "Aus", None, None),
+            ("Schaltspiele Frequenz Verdichter", "15", None, "total_increasing"),
+            ("Ist Frequenz Verdichter", "2500 rpm", "rpm", "measurement"),
+            ("Verdichter", "0 rpm", "rpm", "measurement"),
+        ]
+        for key, initial, unit, stateclass in cases:
+            with self.subTest(name=key, value=initial):
+                new = get_discovery(self.new, self.new_events, "Wärmepumpe", key, initial)
+                self.assertEqual(new.get("unit_of_measurement"), unit)
+                self.assertEqual(new.get("state_class"), stateclass)
+
+    def test_unchanged_broad_existing_sensors(self):
+        cases = [
+            ("Wärmepumpe", "Verdichter", "2163 rpm"),
+            ("Wärmepumpe", "Verdichter", "0 rpm"),
+            ("Wärmepumpe", "Verdichter", "Aus"),
+            ("Wärmepumpe", "Drehzahl Pumpe M1", "Aus"),
+            ("Wärmepumpe", "Drehzahl Pumpe M1", "55 %"),
+            ("Wärmepumpe", "Leistungsanforderung", "Aus"),
+            ("Wärmepumpe", "Leistungsanforderung", "35 %"),
+            ("Wärmepumpe", "Betriebsstd. Verdichter", "4388 h"),
+            ("Wärmepumpe", "Schaltspiele Verdichter", "2681"),
+            ("Wärmepumpe", "Niederdruck", "4.4 BAR"),
+            ("Wärmepumpe", "Soll Leistung", "2.6 KW"),
+            ("Wärmepumpe", "Warmwassertemperatur", "43.5 °C"),
+            ("Wärmepumpe", "Volumenstrom", "1.2m3/h"),
+            ("Wärmepumpe", "AT Mittelwert", "8.0 K"),
+            ("Heizkreis 1", "Vorlauftemperatur", "31.5 °C"),
+            ("Heizkreis 2", "Pumpe", "Ein"),
+            ("Statistik", "elektrische Energie Tag", "7.158 KWh"),
+            ("2. WEZ", "Status", "Aus"),
+        ]
+        for sec, key, value in cases:
+            with self.subTest(sec=sec, key=key, value=value):
+                self.assertEqual(
+                    get_discovery(self.old, self.old_events, sec, key, value),
+                    get_discovery(self.new, self.new_events, sec, key, value))
+                if sec == "Wärmepumpe" and key == "Verdichter" and value.lower().endswith(" rpm"):
+                    self.assertEqual(
+                        self.new["build_clean_data"]({sec: {key: value}})[sec][key],
+                        value[:-4],
+                    )
+                else:
+                    self.assertEqual(self.old["build_clean_data"]({sec: {key:value}}),
+                                     self.new["build_clean_data"]({sec: {key:value}}))
+
+    def test_mqtt_ids_and_retained_config_replaced(self):
+        for sec, key, value in [
+            ("Wärmepumpe", "Verdichter", "0 Hz"),
+            ("Wärmepumpe", "Ist Frequenz Verdichter", "Aus"),
+            ("Wärmepumpe", "Verdichter", "0 rpm"),
+        ]:
+            with self.subTest(key=key, initial=value):
+                old = get_discovery(self.old, self.old_events, sec, key, value)
+                new = get_discovery(self.new, self.new_events, sec, key, value)
+                for field in ("uniq_id", "name", "state_topic", "availability_topic", "device"):
+                    self.assertEqual(old[field], new[field])
+                self.assertTrue(self.old_events[-1][2])
+                self.assertTrue(self.new_events[-1][2])
+                self.assertEqual(self.old_events[-1][0], self.new_events[-1][0])
+                retained = {self.old_events[-1][0]: old}
+                retained[self.new_events[-1][0]] = new  # offline retained-message replacement
+                self.assertEqual(retained[self.new_events[-1][0]], new)
+
+    def test_only_bare_compressor_hz_mqtt_state_is_normalized(self):
+        # The old v1.1.2 wrong "h" sensor accepts numeric state before
+        # upgraded Discovery, and the new Hz sensor also accepts it.
+        cases = [
+            ("0 Hz", "0"), ("45 Hz", "45"),
+            ("62 hZ", "62"), ("59 HZ", "59"),
+            ("45,5 Hz", "45.5"), ("Aus", "0"),
+            ("2500 rpm", "2500"), ("0 rpm", "0"),
+            ("23 RPM", "23"), ("2400,5 rpm", "2400.5"),
+        ]
+        for raw, expected in cases:
+            with self.subTest(value=raw):
+                state = self.new["build_clean_data"](
+                    {"Wärmepumpe": {"Verdichter": raw}}
+                )["Wärmepumpe"]["Verdichter"]
+                self.assertEqual(state, expected)
+
+        # Explicitly unchanged values in other sections and keys.
+        for section, key, value in [
+            ("Wärmepumpe", "Ist Frequenz Verdichter", "45 Hz"),
+            ("Wärmepumpe", "Soll Frequenz Verdichter", "45 hZ"),
+            ("Heizkreis 1", "Verdichter", "45 Hz"),
+            ("Wärmepumpe", "Verdichterstatus", "45 Hz"),
+            ("Wärmepumpe", "Betriebsstd. Verdichter", "4400 h"),
+            ("Wärmepumpe", "Verdichter", "Aus"),
+         ]:
+            with self.subTest(section=section, key=key, value=value):
+                data = {section: {key: value}}
+                self.assertEqual(
+                    self.old["build_clean_data"](data),
+                    self.new["build_clean_data"](data),
+                )
+
+        old = self.old["build_clean_data"](
+            {"Wärmepumpe": {"Verdichter": "45 Hz"}}
+        )["Wärmepumpe"]["Verdichter"]
+        new = self.new["build_clean_data"](
+            {"Wärmepumpe": {"Verdichter": "45 Hz"}}
+        )["Wärmepumpe"]["Verdichter"]
+        self.assertEqual(old, "45 Hz")
+        self.assertEqual(new, "45")
+
+    def test_pending_discovery_updates_only_compressor_once(self):
+        for raw, unit, number in (
+            ("45 Hz", "Hz", "45"),
+            ("0 Hz", "Hz", "0"),
+            ("2163 rpm", "rpm", "2163"),
+            ("0 rpm", "rpm", "0"),
+        ):
+            with self.subTest(raw=raw):
+                data = {"Wärmepumpe": {
+                    "Außengerät Variante": "WAB 14" if unit == "rpm" else "WSB 6",
+                    "Verdichter": "Aus",
+                    "Wärmepumpe Betrieb": "Heizen",
+                }, "Heizkreis 1": {"Vorlauftemperatur": "35 °C"}}
+                self.new_events.clear()
+                self.new["publish_discovery"](data)
+                config_initial = [payload for topic, payload, retain in self.new_events
+                                  if topic == "homeassistant/sensor/wem_lokal_wp_verdichter/config"]
+                self.assertEqual(len(config_initial), 1)
+                self.assertIsNone(config_initial[0].get("unit_of_measurement"))
+                self.assertEqual(
+                    self.new["build_clean_data"](data)["Wärmepumpe"]["Verdichter"], "0"
+                )
+                self.new_events.clear()
+                pending = {"ticket": None, "last_attempt": 0.0}
+                self.assertIs(
+                    self.new["update_pending_verdichter_discovery"](
+                        data, pending, "Heizkreis 1"
+                    ), pending
+                )
+                self.assertEqual(self.new_events, [])
+                data["Wärmepumpe"]["Verdichter"] = raw
+                self.assertEqual(
+                    self.new["build_clean_data"](data)["Wärmepumpe"]["Verdichter"], number
+                )
+                self.assertIsNone(self.new["update_pending_verdichter_discovery"](
+                    data, pending, "Wärmepumpe"
+                ))
+                self.assertEqual(len(self.new_events), 1)
+                topic, config, retained = self.new_events[0]
+                self.assertEqual(topic, "homeassistant/sensor/wem_lokal_wp_verdichter/config")
+                self.assertTrue(retained)
+                self.assertEqual(config.get("unit_of_measurement"), unit)
+                self.assertEqual(config.get("state_class"), "measurement")
+                self.assertIsNone(self.new["update_pending_verdichter_discovery"](
+                    data, None, "Wärmepumpe"
+                ))
+                self.assertEqual(len(self.new_events), 1)
+
+    def test_pending_discovery_waits_for_explicit_numeric_unit(self):
+        data = {"Wärmepumpe": {"Verdichter": "Aus"}}
+        for raw in ("Aus", "Ein", "0", "Stop", "unbekannt",
+                    "rpm", "kA Hz", "21 hours"):
+            with self.subTest(raw=raw):
+                data["Wärmepumpe"]["Verdichter"] = raw
+                self.new_events.clear()
+                pending = {"ticket": None, "last_attempt": 0.0}
+                self.assertIs(self.new["update_pending_verdichter_discovery"](
+                    data, pending, "Wärmepumpe"
+                ), pending)
+                self.assertEqual(self.new_events, [])
+
+    def test_known_limitations_remain_documented(self):
+        p = get_discovery(self.new, self.new_events, "Wärmepumpe", "Verdichter", "Aus")
+        self.assertIsNone(p.get("unit_of_measurement"))  # bare name still unresolved
+        p = get_discovery(self.new, self.new_events, "Wärmepumpe", "Drehzahl Pumpe M1", "55 %")
+        self.assertEqual(render_state(self.new, p, "Wärmepumpe", "Drehzahl Pumpe M1", "Stop"), "Stop")
+
+if __name__ == "__main__":
+    unittest.main()

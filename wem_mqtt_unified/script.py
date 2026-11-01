@@ -251,7 +251,7 @@ logging.basicConfig(
     datefmt="%Y-%m-%d %H:%M:%S"
 )
 logger = logging.getLogger("wem_mqtt_unified")
-logger.info("🚀 Starting Weishaupt WEM-Lokal MQTT v1.1.2")
+logger.info("🚀 Starting Weishaupt WEM-Lokal MQTT v1.1.3")
 try:
     signal.signal(signal.SIGTERM, signal_handler)
 except Exception:
@@ -447,6 +447,26 @@ def normalize_id(text):
 # CLEAN DATA BUILDER
 # ---------------------------
 
+def verdichter_discovery_unit(value):
+    """Recognize only explicit numeric compressor frequencies/speeds.
+
+    The initial value 'Aus' cannot distinguish Hz from rpm.
+    """
+    raw = str(value).strip()
+    low = raw.lower()
+    if low.endswith(" hz"):
+        unit, number = "Hz", raw[:-3].strip()
+    elif low.endswith(" rpm"):
+        unit, number = "rpm", raw[:-4].strip()
+    else:
+        return None
+    try:
+        float(number.replace(",", "."))
+    except ValueError:
+        return None
+    return unit
+
+
 def build_clean_data(data_store):
     clean = {}
 
@@ -462,6 +482,16 @@ def build_clean_data(data_store):
 
             elif value.lower() == "ein":
                 clean_vals[k] = "1"
+
+            # Issue #14: publish numeric bare Verdichter values before
+            # the first (or corrected) MQTT Discovery, for both Hz and rpm.
+            # No other sensor or WebIF value is changed.
+            elif (
+                section == "Wärmepumpe"
+                and k.lower() == "verdichter"
+                and (unit := verdichter_discovery_unit(value))
+            ):
+                clean_vals[k] = value[:-3 if unit == "Hz" else -4].strip().replace(",", ".")
 
             else:
                 # Allgemeine Bereinigung
@@ -1338,7 +1368,7 @@ def apply_detected_data_urls(data_urls):
 # MQTT DISCOVERY
 # ---------------------------
 
-def publish_discovery(data_store):
+def publish_discovery(data_store, verdichter_only=False):
 
     main_device_id = "wem_lokal_info"
 
@@ -1369,11 +1399,12 @@ def publish_discovery(data_store):
         }       
     }
 
-    mqtt_publish(
-        f"{MQTT_BASE}/sensor/wem_lokal_info_status/config",
-        main_device_payload,
-        retain=True
-    )
+    if not verdichter_only:
+        mqtt_publish(
+            f"{MQTT_BASE}/sensor/wem_lokal_info_status/config",
+            main_device_payload,
+            retain=True
+        )
 
     webif_status_payload = {
         "name": "WebIF-Status",
@@ -1399,11 +1430,12 @@ def publish_discovery(data_store):
         }
     }
 
-    mqtt_publish(
-        f"{MQTT_BASE}/sensor/wem_lokal_webif_status/config",
-        webif_status_payload,
-        retain=True
-    )
+    if not verdichter_only:
+        mqtt_publish(
+            f"{MQTT_BASE}/sensor/wem_lokal_webif_status/config",
+            webif_status_payload,
+            retain=True
+        )
 
     last_update_payload = {
         "name": "Update Sensoren",
@@ -1426,11 +1458,12 @@ def publish_discovery(data_store):
         }
     }
 
-    mqtt_publish(
-        f"{MQTT_BASE}/sensor/wem_lokal_last_update/config",
-        last_update_payload,
-        retain=True
-    )
+    if not verdichter_only:
+        mqtt_publish(
+            f"{MQTT_BASE}/sensor/wem_lokal_last_update/config",
+            last_update_payload,
+            retain=True
+        )
 
     success_payload = {
         "name": "Erfolgsquote (Gestern)",
@@ -1456,11 +1489,12 @@ def publish_discovery(data_store):
         }
     }
 
-    mqtt_publish(
-        f"{MQTT_BASE}/sensor/wem_daily_success/config",
-        success_payload,
-        retain=True
-    )
+    if not verdichter_only:
+        mqtt_publish(
+            f"{MQTT_BASE}/sensor/wem_daily_success/config",
+            success_payload,
+            retain=True
+        )
 
     if not any(values for values in data_store.values() if values):
         return
@@ -1478,10 +1512,14 @@ def publish_discovery(data_store):
     for section, values in data_store.items():
         if not values or section not in device_map:
             continue
+        if verdichter_only and section != "Wärmepumpe":
+            continue
 
         dev_id, dev_name = device_map[section]
 
         for key, value in values.items():
+            if verdichter_only and key != "Verdichter":
+                continue
 
             key_lower = key.lower()
             v = str(value).strip()
@@ -1593,6 +1631,26 @@ def publish_discovery(data_store):
                     "}}", " | replace('m3/h','') | replace('m³/h','') }}"
                 )
 
+            elif (
+                section == "Wärmepumpe"
+                and (
+                    (key_lower == "verdichter" and verdichter_discovery_unit(v) == "Hz")
+                    or (
+                        "frequenz verdichter" in key_lower
+                        and not any(
+                            part in key_lower
+                            for part in ("betriebsstd", "betriebsstunden", "schaltspiele")
+                        )
+                        and not v_lower.endswith((" rpm", " h"))
+                    )
+                )
+            ):
+                payload["unit_of_measurement"] = "Hz"
+                payload["state_class"] = "measurement"
+                payload["value_template"] = value_template.replace(
+                    "}}", " | replace(' Hz','') | replace(' hz','') | replace(' HZ','') | replace(' hZ','') }}"
+                )
+
             elif " h" in v_lower and section != "Statistik":
                 payload["unit_of_measurement"] = "h"
                 payload["state_class"] = "total_increasing"
@@ -1615,7 +1673,56 @@ def publish_discovery(data_store):
                 payload["state_class"] = "total_increasing"
 
             disc_topic = f"{MQTT_BASE}/sensor/{sensor_id}/config"
+            if verdichter_only:
+                # Confirm this one-time configuration update with MQTT QoS 1.
+                # Ordinary MQTT state and Discovery paths are unchanged (QoS 0).
+                return mqtt_client.publish(
+                    disc_topic, json.dumps(payload, ensure_ascii=False),
+                    qos=1, retain=True
+                )
             mqtt_publish(disc_topic, payload, retain=True)
+
+def update_pending_verdichter_discovery(data_store, pending, updated_section):
+    """Retry the one-time Verdichter Discovery until MQTT QoS 1 PUBACK.
+
+    Only runs after a normal WP poll; no extra WebIF requests or changes to
+    the ordinary MQTT publish path. If disconnected or unacknowledged, the
+    pending state remains active for a later poll.
+    """
+    if pending is None or updated_section != "Wärmepumpe":
+        return pending
+    if not verdichter_discovery_unit(
+        data_store.get("Wärmepumpe", {}).get("Verdichter")
+    ):
+        return pending
+
+    ticket = pending["ticket"]
+    if ticket is not None:
+        try:
+            if ticket.is_published():
+                return None
+        except (ValueError, RuntimeError):
+            pass
+        if time.monotonic() - pending["last_attempt"] < 30:
+            return pending
+
+    # A stopped MQTT connection cannot confirm a retained config.
+    if not mqtt_client.is_connected():
+        return pending
+
+    pending["last_attempt"] = time.monotonic()
+    try:
+        ticket = publish_discovery(data_store, verdichter_only=True)
+        if ticket is not None and ticket.rc == mqtt.MQTT_ERR_SUCCESS:
+            pending["ticket"] = ticket
+            if ticket.is_published():
+                return None
+        else:
+            pending["ticket"] = None
+    except (OSError, ValueError, RuntimeError) as exc:
+        logger.warning("Verdichter MQTT Discovery update deferred: %s", exc)
+        pending["ticket"] = None
+    return pending
 
 # ---------------------------
 # DAILY WEBIF REST
@@ -1753,6 +1860,7 @@ async def main():
 
     try:
         data_store = {}
+        verdichter_discovery_pending = None
         dynamic_urls_ready = False
         last_success = time.time()
         last_status = "offline"
@@ -2070,11 +2178,23 @@ async def main():
                         {"WEM-Lokal Info": build_clean_data(data_store)}
                     )
 
+                    # The actual MQTT state is sent FIRST, so a late Hz/rpm
+                    # correction never sees an old nonnumeric value in HA.
+                    if not discovery_enabled and verdichter_discovery_pending:
+                        verdichter_discovery_pending = update_pending_verdichter_discovery(
+                            data_store, verdichter_discovery_pending, name
+                        )
+
                     if discovery_enabled:
                         publish_discovery(data_store)
 
                         if all_devices_ready():
                             discovery_enabled = False
+                            verdichter_discovery_pending = (
+                                {"ticket": None, "last_attempt": 0.0}
+                                if str(data_store.get("Wärmepumpe", {}).get("Verdichter", ""))
+                                .strip().lower() == "aus" else None
+                            )
 
                     # ---------------------------------------------------------
                     # DAILY STATISTICS TRIGGER

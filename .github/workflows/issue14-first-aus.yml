@@ -1,0 +1,62 @@
+name: Issue 14 First Aus - Hz and rpm discovery verification
+on:
+  push:
+    branches:
+      - fix/issue-14-verdichter-hz-v1.1.3
+    paths:
+      - tests/test_issue14_first_aus_core.py
+      - .github/workflows/issue14-first-aus.yml
+      - wem_mqtt_unified/script.py
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  first_aus:
+    name: Verdichter Aus then ${{ matrix.next }} / ${{ matrix.mode }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 18
+    strategy:
+      fail-fast: false
+      matrix:
+        next: ['45 Hz', '2163 rpm']
+        mode: ['no_rediscovery', 'repeat_discovery']
+    steps:
+      - name: Checkout v1.1.3 candidate
+        uses: actions/checkout@v4
+        with:
+          path: candidate
+      - name: Checkout unmodified v1.1.2 tag
+        uses: actions/checkout@v4
+        with:
+          ref: v1.1.2
+          path: baseline
+      - name: Start throwaway localhost Mosquitto broker
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq mosquitto
+          echo 'listener 18884 127.0.0.1' | sudo tee /etc/mosquitto/conf.d/wem_first_aus.conf >/dev/null
+          echo 'allow_anonymous true' | sudo tee -a /etc/mosquitto/conf.d/wem_first_aus.conf >/dev/null
+          echo 'persistence false' | sudo tee -a /etc/mosquitto/conf.d/wem_first_aus.conf >/dev/null
+          sudo chmod 644 /etc/mosquitto/conf.d/wem_first_aus.conf
+          sudo mosquitto -c /etc/mosquitto/conf.d/wem_first_aus.conf -d
+          sleep 2
+          python3 -c "import socket; s=socket.create_connection(('127.0.0.1',18884),5); s.close()"
+      - name: Verify genuine Home Assistant Core 2026.10.2 first-Aus behavior
+        shell: bash
+        timeout-minutes: 12
+        run: |
+          set -euo pipefail
+          docker pull ghcr.io/home-assistant/home-assistant:2026.10.2
+          timeout --signal=TERM --kill-after=20s 540s docker run --rm \
+            --network host \
+            --entrypoint python3 \
+            -v "$PWD/candidate:/candidate:ro" \
+            -v "$PWD/baseline:/baseline:ro" \
+            -e WEM_V112_SRC=/baseline/wem_mqtt_unified/script.py \
+            -e WEM_HA_TEST_MQTT_PORT=18884 \
+            -e "WEM_OFF_FIRST_NEXT=${{ matrix.next }}" \
+            -e "WEM_OFF_FIRST_MODE=${{ matrix.mode }}" \
+            ghcr.io/home-assistant/home-assistant:2026.10.2 \
+            /candidate/tests/test_issue14_first_aus_core.py

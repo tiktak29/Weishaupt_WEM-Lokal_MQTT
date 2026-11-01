@@ -1,0 +1,29 @@
+name: Issue 14 production Docker image smoke test
+on:
+  push:
+    branches:
+      - fix/issue-14-verdichter-hz-v1.1.3
+    paths:
+      - wem_mqtt_unified/script.py
+      - .github/workflows/issue14-docker-smoke.yml
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  actual_addon_image:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - name: Checkout candidate app and Dockerfile
+        uses: actions/checkout@v4
+      - name: Build actual unchanged addon Dockerfile
+        run: docker build --pull -t wem-issue14-test:v113 ./wem_mqtt_unified
+      - name: Validate runtime Python and production dependencies without a network connection to the heating system
+        run: |
+          docker run --rm --network none --entrypoint python3 wem-issue14-test:v113 -c '
+          import sys, pathlib, py_compile, aiohttp, bs4, paho.mqtt.client
+          assert sys.version_info[:2] == (3,11), sys.version
+          assert pathlib.Path("/app/run.sh").exists()
+          py_compile.compile("/app/script.py", doraise=True)
+          print("PASS: Python 3.11, app script compiled, addon dependencies importable")
+          '
