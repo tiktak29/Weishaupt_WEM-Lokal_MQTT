@@ -1,10 +1,10 @@
 # Entwicklungs- und Release-Richtlinie – WEM-Lokal MQTT
 
-**Status:** Fachlich geprüft – zur Freigabe im Pull Request; noch nicht in `main` übernommen  
+**Status:** Verbindliche Entwicklungs- und Release-Richtlinie ab Aufnahme in `main`  
 **Repository:** https://github.com/tiktak29/Weishaupt_WEM-Lokal_MQTT  
 **Repository-Pfad:** `docs/DEVELOPMENT_RELEASE_POLICY.md`  
 **Stand:** 01.11.2026  
-**Gültigkeit nach Freigabe:** Neue Entwicklungsarbeiten, Bugfixes und Releases ab v1.1.4; bestehende Releases werden nicht rückwirkend geändert.
+**Gültigkeit:** Ab Aufnahme in `main` für neue Entwicklungsarbeiten, Bugfixes und Releases ab v1.1.4; bestehende Releases werden nicht rückwirkend geändert.
 
 ## 1. Ziele und Grundsätze
 
@@ -130,4 +130,4 @@ Vor Beginn einer neuen Entwicklung wird die Richtlinie herangezogen und gegen de
 
 ---
 
-**Freigabestatus:** Fachlich geprüft und zur Freigabe im Pull Request vorgelegt. Verbindlich nach genehmigtem Merge in `main`.
+**Inkrafttreten:** Mit dem genehmigten Merge dieser Richtlinie in `main`.
